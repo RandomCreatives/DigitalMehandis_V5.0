@@ -1,0 +1,152 @@
+version: "1.0"
+name: "Ethiopian Construction Block Classification v1.0"
+description: >
+  Common AutoCAD block names used in Ethiopian construction drawings.
+  Based on Addis Ababa + regional practice survey (2024).
+  Community-editable: submit a PR to add new patterns.
+
+# Discipline mapping (used by FederationEngine)
+discipline_map:
+  DOOR: ARCHITECTURAL
+  WINDOW: ARCHITECTURAL
+  STAIR: ARCHITECTURAL
+  COLUMN: STRUCTURAL
+  BEAM: STRUCTURAL
+  LIGHT_FIXTURE: ELECTRICAL
+  SWITCH: ELECTRICAL
+  SOCKET: ELECTRICAL
+  PANEL: ELECTRICAL
+  TOILET: SANITARY
+  BASIN: SANITARY
+  SINK: SANITARY
+  SHOWER: SANITARY
+  FLOOR_DRAIN: SANITARY
+  MANHOLE: SANITARY
+
+categories:
+  # ── Architectural ──────────────────────────────────────────────
+  DOOR:
+    - "door"
+    - "DR-"
+    - "D-0"
+    - "D-1"
+    - "D-2"
+    - "single-door"
+    - "double-door"
+    - "sliding-door"
+    - "flush-door"
+    - "panel-door"
+
+  WINDOW:
+    - "window"
+    - "WD-"
+    - "W-0"
+    - "W-1"
+    - "casement"
+    - "sliding-window"
+    - "fixed-window"
+    - "louver"
+    - "awning"
+
+  STAIR:
+    - "stair"
+    - "staircase"
+    - "STAIR-"
+    - "step"
+    - "landing"
+
+  # ── Structural ─────────────────────────────────────────────────
+  COLUMN:
+    - "column"
+    - "COL-"
+    - "C-0"
+    - "C-1"
+    - "pillar"
+    - "col_"
+
+  BEAM:
+    - "beam"
+    - "BM-"
+    - "B-0"
+    - "B-1"
+    - "girder"
+
+  # ── Electrical ─────────────────────────────────────────────────
+  LIGHT_FIXTURE:
+    - "light"
+    - "lamp"
+    - "LED"
+    - "downlight"
+    - "LIGHT-"
+    - "fluorescent"
+    - "chandelier"
+    - "wall-light"
+    - "emergency-light"
+    - "spotlight"
+    - "bulkhead"
+
+  SWITCH:
+    - "switch"
+    - "SW-"
+    - "dimmer"
+    - "fan-regulator"
+    - "2-way"
+    - "1-way"
+
+  SOCKET:
+    - "socket"
+    - "outlet"
+    - "receptacle"
+    - "plug"
+    - "power-point"
+    - "USB"
+
+  PANEL:
+    - "panel"
+    - "DB-"
+    - "MCB"
+    - "distribution-board"
+    - "consumer-unit"
+    - "ELDB"
+    - "MDB"
+
+  # ── Sanitary ───────────────────────────────────────────────────
+  TOILET:
+    - "WC"
+    - "toilet"
+    - "water-closet"
+    - "commode"
+    - "squat"
+    - "closet"
+
+  BASIN:
+    - "basin"
+    - "wash-basin"
+    - "lavatory"
+    - "hand-wash"
+    - "vanity"
+
+  SINK:
+    - "sink"
+    - "kitchen-sink"
+    - "washing"
+    - "laundry"
+
+  SHOWER:
+    - "shower"
+    - "shower-head"
+    - "shower-tray"
+
+  FLOOR_DRAIN:
+    - "floor-drain"
+    - "drain"
+    - "gully"
+    - "trap"
+    - "FD-"
+
+  MANHOLE:
+    - "manhole"
+    - "MH-"
+    - "inspection-chamber"
+    - "IC-"
+    - "catch-basin"
