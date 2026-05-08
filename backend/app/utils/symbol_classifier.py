@@ -25,6 +25,9 @@ class SymbolClassifier:
             # Fallback: look relative to CWD (useful in tests)
             path = Path("config/ethiopian_blocks.yaml")
         if not path.exists():
+            # Another fallback for when running from backend directory
+            path = Path("../config/ethiopian_blocks.yaml")
+        if not path.exists():
             cls._data = {"categories": {}, "discipline_map": {}}
             return
         with open(path, "r", encoding="utf-8") as f:
