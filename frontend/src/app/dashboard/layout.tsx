@@ -1,12 +1,22 @@
 "use client";
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
-import { LayoutDashboard, FolderOpen, LogOut } from "lucide-react";
+import {
+  LayoutDashboard, LogOut, Download, Archive, Settings,
+  Ruler, Table2, Layers, BarChart3, FolderOpen,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const TOP_NAV = [
+  { label: "Projects",  href: "/dashboard",  icon: LayoutDashboard },
+  { label: "My Work",   href: "/dashboard",  icon: FolderOpen },
+];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
+  const router   = useRouter();
+  const pathname = usePathname();
   const { accessToken, logout } = useAuthStore();
 
   useEffect(() => {
@@ -21,31 +31,49 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex min-h-screen">
-      {/* Sidebar */}
-      <aside className="w-56 bg-[#1F4E79] text-white flex flex-col">
-        <div className="p-5 border-b border-white/10">
-          <span className="text-xl font-bold">EthioQS</span>
+    <div className="flex min-h-screen bg-surface">
+      {/* ── Sidebar ── */}
+      <aside className="w-56 bg-primary text-white flex flex-col shrink-0">
+        {/* Brand */}
+        <div className="px-5 py-4 border-b border-white/10">
+          <p className="text-lg font-bold tracking-tight leading-none">Ethio-QS Engine</p>
+          <p className="text-xs text-white/50 mt-0.5">Quantity Surveying Pro</p>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
-          <Link href="/dashboard" className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/10 text-sm transition-colors">
-            <LayoutDashboard size={16} /> Projects
-          </Link>
-          <Link href="/dashboard" className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/10 text-sm transition-colors">
-            <FolderOpen size={16} /> My Work
-          </Link>
+
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          {TOP_NAV.map(({ label, href, icon: Icon }) => (
+            <Link key={label} href={href}
+              className={cn("nav-item", pathname === href && "active")}>
+              <Icon size={16} /> {label}
+            </Link>
+          ))}
         </nav>
-        <div className="p-4 border-t border-white/10">
-          <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors">
+
+        {/* Bottom actions */}
+        <div className="px-3 py-4 border-t border-white/10 space-y-0.5">
+          <Link href="/dashboard" className="nav-item"><Settings size={16} /> Project Settings</Link>
+          <Link href="/dashboard" className="nav-item"><Archive size={16} /> Archived Data</Link>
+          <button
+            onClick={handleLogout}
+            className="nav-item w-full text-left text-white/60 hover:text-white"
+          >
             <LogOut size={16} /> Sign Out
+          </button>
+        </div>
+
+        {/* Export BoQ CTA */}
+        <div className="px-3 pb-4">
+          <button className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-orange-600 text-white font-semibold text-sm py-2.5 rounded-lg transition-colors">
+            <Download size={15} /> Export BoQ
           </button>
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 bg-gray-50 overflow-auto">
+      {/* ── Main ── */}
+      <div className="flex-1 flex flex-col min-w-0">
         {children}
-      </main>
+      </div>
     </div>
   );
 }

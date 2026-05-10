@@ -1,27 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --brand: #1F4E79;
-  }
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply bg-surface text-on-surface antialiased;
+    font-family: 'Inter', sans-serif;
   }
+  /* Tabular numbers for data tables */
+  table { font-variant-numeric: tabular-nums; }
 }
 
 @layer components {
+  /* Buttons */
   .btn-primary {
-    @apply bg-[#1F4E79] text-white px-4 py-2 rounded-lg hover:bg-[#1a4268] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-accent text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-secondary {
-    @apply border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors font-medium;
+    @apply border border-primary text-primary px-4 py-2 rounded-lg hover:bg-primary hover:text-white transition-colors font-semibold text-sm;
   }
+  .btn-ghost {
+    @apply text-on-surface-variant px-3 py-1.5 rounded hover:bg-surface-container transition-colors text-sm;
+  }
+
+  /* Inputs */
   .input {
-    @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1F4E79] focus:border-transparent;
+    @apply w-full border border-outline-variant rounded-lg px-3 py-2 text-sm bg-white text-on-surface
+           focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent
+           placeholder:text-on-surface-variant;
   }
+  .input-unit {
+    @apply relative;
+  }
+  .input-unit input {
+    @apply pr-10;
+  }
+  .input-unit span {
+    @apply absolute right-3 top-1/2 -translate-y-1/2 text-label-caps text-on-surface-variant pointer-events-none;
+  }
+
+  /* Cards / Panels */
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+    @apply bg-white rounded-xl border border-outline-variant p-6;
   }
+  .panel {
+    @apply bg-white rounded-xl border border-outline-variant;
+  }
+
+  /* Status chips */
+  .chip {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-label-caps font-bold uppercase tracking-wide;
+  }
+  .chip-draft     { @apply bg-surface-highest text-on-surface-variant; }
+  .chip-approved  { @apply bg-green-100 text-green-800; }
+  .chip-progress  { @apply bg-accent text-white; }
+  .chip-revision  { @apply bg-error-container text-error; }
+  .chip-pending   { @apply bg-secondary-container text-secondary; }
+
+  /* Table */
+  .data-table { @apply w-full text-body-data; }
+  .data-table thead tr { @apply bg-primary text-white; }
+  .data-table thead th { @apply px-3 py-2.5 text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap; }
+  .data-table thead th.num { @apply text-right; }
+  .data-table tbody tr { @apply border-b border-outline-variant last:border-0; }
+  .data-table tbody tr:nth-child(even) { @apply bg-surface-low; }
+  .data-table tbody tr:hover { @apply bg-secondary-container/30; }
+  .data-table tbody td { @apply px-3 py-2; }
+  .data-table tbody td.num { @apply text-right tabular-nums; }
+  .data-table tfoot tr { @apply bg-primary/10 font-bold; }
+  .data-table tfoot td { @apply px-3 py-3; }
+
+  /* Sidebar nav item */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-white/70 hover:text-white hover:bg-white/10;
+  }
+  .nav-item.active {
+    @apply bg-white/15 text-white font-semibold;
+  }
+
+  /* Section tab */
+  .section-tab {
+    @apply px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors border;
+  }
+  .section-tab.active   { @apply bg-primary text-white border-primary; }
+  .section-tab.inactive { @apply bg-white text-on-surface-variant border-outline-variant hover:bg-surface-container; }
 }
