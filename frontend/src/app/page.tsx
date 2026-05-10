@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowRight, BarChart3, Layers, FileText, Database, Shield, Zap, Sun, Moon, Send, CheckCircle } from "lucide-react";
 import { NavDropdown } from "@/components/NavDropdown";
 import { useTheme } from "@/components/ThemeProvider";
@@ -41,6 +41,21 @@ const RESOURCES_GROUPS = [
 export default function LandingPage() {
   const { theme, toggle } = useTheme();
   const dark = theme === "dark";
+
+  const HEADLINES = ["Federated Data Design", "Construction Data Analytics"];
+  const [headlineIdx, setHeadlineIdx] = useState(0);
+  const [fading, setFading] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFading(true);
+      setTimeout(() => {
+        setHeadlineIdx((i) => (i + 1) % HEADLINES.length);
+        setFading(false);
+      }, 500);
+    }, 17000);
+    return () => clearInterval(interval);
+  }, []);
 
   const [contact, setContact] = useState({ name: "", email: "", type: "General", message: "" });
   const [submitted, setSubmitted] = useState(false);
@@ -115,7 +130,17 @@ export default function LandingPage() {
               Open Source · Free Forever · MoUDC 2023
             </div>
             <h1 className="text-4xl md:text-5xl font-bold leading-tight" style={{ color: textPri }}>
-              Federated Data Design<br />
+              <span
+                style={{
+                  display: "inline-block",
+                  transition: "opacity 0.5s ease, transform 0.5s ease",
+                  opacity: fading ? 0 : 1,
+                  transform: fading ? "translateY(-8px)" : "translateY(0)",
+                }}
+              >
+                {HEADLINES[headlineIdx]}
+              </span>
+              <br />
               <span style={{ color: "#eb6905" }}>for Building Construction</span>
             </h1>
             <p className="text-lg leading-relaxed" style={{ color: textMuted }}>
