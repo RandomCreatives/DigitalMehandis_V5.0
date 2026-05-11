@@ -4,8 +4,24 @@ from sqlalchemy import (
     String, Boolean, Integer, Numeric, Text, ForeignKey,
     DateTime, CheckConstraint
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+
+class GUID(TypeDecorator):
+    """Platform-independent UUID type. Uses String(36) for SQLite, native UUID for PostgreSQL."""
+    impl = String(36)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return uuid.UUID(value)
 from app.db.base import Base
 
 
@@ -16,7 +32,7 @@ def now_utc():
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(255))
@@ -33,8 +49,8 @@ class User(Base):
 class Project(Base):
     __tablename__ = "projects"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     location: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -57,8 +73,8 @@ class Project(Base):
 class Drawing(Base):
     __tablename__ = "drawings"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     file_size_mb: Mapped[float | None] = mapped_column(Numeric(10, 2))
@@ -75,8 +91,8 @@ class Drawing(Base):
 class TakeoffItem(Base):
     __tablename__ = "takeoff_items"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     item_code: Mapped[str | None] = mapped_column(String(50))
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     unit: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -92,8 +108,8 @@ class TakeoffItem(Base):
 class Rate(Base):
     __tablename__ = "rates"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     item_code: Mapped[str | None] = mapped_column(String(50))
     description: Mapped[str] = mapped_column(String(500), nullable=False)
     unit: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -108,8 +124,8 @@ class Rate(Base):
 class BBSBar(Base):
     __tablename__ = "bbs_bars"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     bar_mark: Mapped[str | None] = mapped_column(String(50))
     member_name: Mapped[str] = mapped_column(String(255), nullable=False)
     bar_diameter_mm: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -132,8 +148,8 @@ class BBSBar(Base):
 class BOQOutput(Base):
     __tablename__ = "boq_outputs"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     section: Mapped[str] = mapped_column(String(50), nullable=False)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     total_amount: Mapped[float | None] = mapped_column(Numeric(15, 2))
@@ -154,9 +170,9 @@ class SuggestedQuantity(Base):
     """
     __tablename__ = "suggested_quantities"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    drawing_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("drawings.id", ondelete="SET NULL"), nullable=True)
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    drawing_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("drawings.id", ondelete="SET NULL"), nullable=True)
 
     discipline: Mapped[str] = mapped_column(String(50), nullable=False)
     element_category: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -185,10 +201,10 @@ class FederatedQuantity(Base):
     """
     __tablename__ = "federated_quantities"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    drawing_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("drawings.id", ondelete="SET NULL"), nullable=True)
-    suggested_quantity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("suggested_quantities.id", ondelete="SET NULL"), nullable=True)
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    drawing_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("drawings.id", ondelete="SET NULL"), nullable=True)
+    suggested_quantity_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("suggested_quantities.id", ondelete="SET NULL"), nullable=True)
 
     discipline: Mapped[str] = mapped_column(String(50), nullable=False)
     element_category: Mapped[str] = mapped_column(String(100), nullable=False)

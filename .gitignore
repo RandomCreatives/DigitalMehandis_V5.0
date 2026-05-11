@@ -30,6 +30,9 @@ yarn-error.log*
 # Uploads
 backend/uploads/
 
+# SQLite local dev database
+backend/*.db
+
 # OS
 .DS_Store
 Thumbs.db
