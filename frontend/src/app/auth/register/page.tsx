@@ -3,16 +3,29 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
+import { useTheme } from "@/components/ThemeProvider";
 
 const ROLES = ["STUDENT", "QS_PROFESSIONAL", "CONTRACTOR"];
 
 export default function RegisterPage() {
-  const router = useRouter();
+  const router   = useRouter();
   const register = useAuthStore((s) => s.register);
   const login    = useAuthStore((s) => s.login);
+  const { theme } = useTheme();
+  const dark = theme === "dark";
+
   const [form, setForm] = useState({ email: "", password: "", full_name: "", organization: "", role: "STUDENT" });
-  const [error, setError] = useState("");
+  const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
+
+  const glassBg  = dark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.85)";
+  const glassBdr = dark ? "rgba(255,255,255,0.10)" : "rgba(9,20,38,0.12)";
+  const textPri  = dark ? "#ffffff"                : "#091426";
+  const textMuted= dark ? "rgba(255,255,255,0.55)" : "rgba(9,20,38,0.60)";
+  const textFaint= dark ? "rgba(255,255,255,0.35)" : "rgba(9,20,38,0.40)";
+  const inputBg  = dark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.95)";
+  const inputBdr = dark ? "rgba(255,255,255,0.12)" : "rgba(9,20,38,0.15)";
+  const inputTxt = dark ? "rgba(255,255,255,0.85)" : "#091426";
 
   function update(field: string, value: string) { setForm((f) => ({ ...f, [field]: value })); }
 
@@ -30,52 +43,68 @@ export default function RegisterPage() {
     } finally { setLoading(false); }
   }
 
+  const inputStyle = { background: inputBg, border: `1px solid ${inputBdr}`, color: inputTxt };
+  const labelStyle = { color: textFaint };
+
   return (
-    <div className="min-h-screen flex bg-surface">
-      <div className="hidden md:flex w-1/2 bg-primary flex-col items-center justify-center p-12 text-white">
-        <h1 className="text-3xl font-bold">Ethio-QS Engine</h1>
-        <p className="text-white/60 mt-2 text-sm">Quantity Surveying Pro</p>
-      </div>
-      <div className="flex-1 flex items-center justify-center px-6 py-8">
-        <div className="w-full max-w-sm space-y-6">
-          <div>
-            <h2 className="text-headline-md text-on-surface">Create Account</h2>
-            <p className="text-sm text-on-surface-variant mt-1">Join EthioQS — it&apos;s free</p>
-          </div>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {[
-              { label: "Full Name", field: "full_name", type: "text", required: true },
-              { label: "Email", field: "email", type: "email", required: true },
-              { label: "Organization (optional)", field: "organization", type: "text", required: false },
-            ].map(({ label, field, type, required }) => (
-              <div key={field}>
-                <label className="block text-label-caps text-on-surface-variant mb-1">{label}</label>
-                <input type={type} className="input" value={form[field as keyof typeof form]}
-                  onChange={(e) => update(field, e.target.value)} required={required} />
-              </div>
-            ))}
-            <div>
-              <label className="block text-label-caps text-on-surface-variant mb-1">Role</label>
-              <select className="input" value={form.role} onChange={(e) => update("role", e.target.value)}>
-                {ROLES.map((r) => <option key={r} value={r}>{r.replace("_", " ")}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-label-caps text-on-surface-variant mb-1">Password</label>
-              <input type="password" className="input" value={form.password}
-                onChange={(e) => update("password", e.target.value)} required autoComplete="new-password" />
-              <p className="text-xs text-on-surface-variant mt-1">Min 8 chars, 1 uppercase, 1 number, 1 special character</p>
-            </div>
-            {error && <p className="text-error text-sm">{error}</p>}
-            <button type="submit" className="btn-primary w-full py-2.5" disabled={loading}>
-              {loading ? "Creating account…" : "Create Account"}
-            </button>
-          </form>
-          <p className="text-sm text-center text-on-surface-variant">
-            Already have an account?{" "}
-            <Link href="/auth/login" className="text-accent font-semibold hover:underline">Sign in</Link>
-          </p>
+    <div className="w-full max-w-md">
+      <div className="rounded-2xl border p-8 space-y-6"
+        style={{ background: glassBg, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderColor: glassBdr, boxShadow: dark ? "0 8px 32px rgba(0,0,0,0.4)" : "0 8px 32px rgba(9,20,38,0.10)" }}>
+
+        <div>
+          <h2 className="text-2xl font-bold" style={{ color: textPri }}>Create Account</h2>
+          <p className="text-sm mt-1" style={{ color: textMuted }}>Join EthioQS — it&apos;s free</p>
         </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {[
+            { label: "Full Name",              field: "full_name",    type: "text",  required: true },
+            { label: "Email",                  field: "email",        type: "email", required: true },
+            { label: "Organization (optional)",field: "organization", type: "text",  required: false },
+          ].map(({ label, field, type, required }) => (
+            <div key={field}>
+              <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={labelStyle}>{label}</label>
+              <input type={type} required={required}
+                className="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-500/40 transition-all"
+                style={inputStyle}
+                value={form[field as keyof typeof form]}
+                onChange={(e) => update(field, e.target.value)}
+              />
+            </div>
+          ))}
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={labelStyle}>Role</label>
+            <select className="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-500/40 transition-all"
+              style={inputStyle} value={form.role} onChange={(e) => update("role", e.target.value)}>
+              {ROLES.map((r) => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={labelStyle}>Password</label>
+            <input type="password" autoComplete="new-password" required
+              className="w-full rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-500/40 transition-all"
+              style={inputStyle}
+              value={form.password}
+              onChange={(e) => update("password", e.target.value)}
+            />
+            <p className="text-xs mt-1" style={{ color: textFaint }}>Min 8 chars, 1 uppercase, 1 number, 1 special character</p>
+          </div>
+
+          {error && <p className="text-sm" style={{ color: "#eb6905" }}>{error}</p>}
+
+          <button type="submit" disabled={loading}
+            className="w-full font-semibold py-3 rounded-lg text-white transition-all hover:scale-[1.02] disabled:opacity-50"
+            style={{ background: "#eb6905", boxShadow: "0 4px 20px rgba(235,105,5,0.35)" }}>
+            {loading ? "Creating account…" : "Create Account"}
+          </button>
+        </form>
+
+        <p className="text-sm text-center" style={{ color: textMuted }}>
+          Already have an account?{" "}
+          <Link href="/auth/login" className="font-semibold hover:underline" style={{ color: "#eb6905" }}>Sign in</Link>
+        </p>
       </div>
     </div>
   );
