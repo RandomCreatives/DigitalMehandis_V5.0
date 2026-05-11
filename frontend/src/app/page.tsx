@@ -42,7 +42,7 @@ export default function LandingPage() {
   const { theme, toggle } = useTheme();
   const dark = theme === "dark";
 
-  const HEADLINES = ["Federated Data Design", "Construction Data Analytics"];
+  const HEADLINES = ["Federated Data Design", "Federated Data Modeling", "Federated Data Management", "Construction Data Analytics"];
   const [headlineIdx, setHeadlineIdx] = useState(0);
   const [fading, setFading] = useState(false);
 
