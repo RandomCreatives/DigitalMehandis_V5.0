@@ -6,36 +6,39 @@ from app.core.constants import UNIT_WEIGHTS_KG_PER_M
 
 
 class BBSCalculator:
-    BEND_DEDUCTION_FACTOR = 2.0  # 2d per bend
-
     @staticmethod
     def calculate_cutting_length(
         bar_shape: str,
         clear_length_m: float,
         diameter_mm: int,
         hook_length_mm: int = 0,
-        bend_count: int = 1,
         cover_deduction_mm: int = 0,
     ) -> float:
         """
-        Returns cutting length in meters.
-        cover_deduction_mm is applied to both ends (total = 2 * cover).
+        Returns cutting length in meters based on formulas in USER_GUIDE.md.
+
+        STRAIGHT: Clear length + 2 * cover
+        L_SHAPE:  2 * Clear length - 2d + 2 * cover
+        HOOK:     Clear length + hook length + 2 * cover
+        U_SHAPE:  2 * Clear length + hook length - 2d + 2 * cover
+        SPIRAL:   2 * Clear length - 4d
         """
         clear_mm = clear_length_m * 1000
-        bend_deduction = BBSCalculator.BEND_DEDUCTION_FACTOR * diameter_mm * bend_count
+        d = diameter_mm
+        c = cover_deduction_mm
+        h = hook_length_mm
 
         match bar_shape:
             case "STRAIGHT":
-                length = clear_mm + (2 * cover_deduction_mm)
+                length = clear_mm + (2 * c)
             case "L_SHAPE":
-                length = (clear_mm * 2) - bend_deduction + (2 * cover_deduction_mm)
-            case "U_SHAPE":
-                length = (clear_mm * 2) + hook_length_mm - bend_deduction + (2 * cover_deduction_mm)
+                length = (clear_mm * 2) - (2 * d) + (2 * c)
             case "HOOK":
-                length = clear_mm + hook_length_mm + (2 * cover_deduction_mm)
+                length = clear_mm + h + (2 * c)
+            case "U_SHAPE":
+                length = (clear_mm * 2) + h - (2 * d) + (2 * c)
             case "SPIRAL":
-                # Simplified stirrup: 2 legs - 4d bend deductions
-                length = (clear_mm * 2) - (4 * diameter_mm)
+                length = (clear_mm * 2) - (4 * d)
             case _:
                 raise ValueError(f"Unknown bar shape: {bar_shape}")
 
