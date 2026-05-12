@@ -2,11 +2,12 @@ fastapi==0.111.0
 uvicorn[standard]==0.29.0
 sqlalchemy==2.0.36
 asyncpg==0.31.0
+psycopg2-binary==2.9.9
 alembic==1.13.1
 pydantic[email]==2.9.2
 pydantic-settings==2.5.2
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+bcrypt==4.1.3
 python-multipart==0.0.9
 python-dotenv==1.0.1
 loguru==0.7.2
@@ -18,9 +19,10 @@ pytest==8.2.0
 pytest-asyncio==0.23.6
 httpx==0.27.0
 aiosqlite==0.20.0
+shapely==2.0.4
 
-# ── Optional: DXF support (Phase 2 UI, available now for admin/testing) ───────
-# pip install ezdxf==0.18.1 shapely==2.0.2
+# ── Phase 2: DXF support ──────────────────────────────────────────────────────
+ezdxf==1.3.4
 
 # ── Optional: OCR for scanned PDFs (heavy, ~1.5GB) ────────────────────────────
 # pip install paddleocr==2.7.0.3 paddlepaddle-tiny pymupdf==1.23.8 opencv-python==4.8.1.78

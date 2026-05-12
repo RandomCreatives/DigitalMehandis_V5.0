@@ -3,15 +3,18 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect } from "react";
 import { useProjectStore } from "@/store/projectStore";
-import { Ruler, Sparkles, Table2, Layers, BarChart3, Database, ChevronLeft, ChevronRight } from "lucide-react";
+import { Ruler, Sparkles, Table2, Layers, BarChart3, Database, ChevronLeft, ChevronRight, SlidersHorizontal, ClipboardList, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { label: "Drawings",    slug: "drawings",    icon: Ruler },
+  { label: "Calibration", slug: "calibration", icon: SlidersHorizontal },
   { label: "Suggestions", slug: "suggestions", icon: Sparkles },
   { label: "Take-off",    slug: "takeoff",     icon: Table2 },
   { label: "BOQ",         slug: "boq",         icon: Layers },
+  { label: "BOQ Items",   slug: "boq-items",   icon: ClipboardList },
   { label: "Bar Schedule",slug: "bbs",         icon: BarChart3 },
+  { label: "Audit Log",   slug: "audit-log",   icon: ScrollText },
   { label: "Cost Data",   slug: "cost-data",   icon: Database },
 ];
 
