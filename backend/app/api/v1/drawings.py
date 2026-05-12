@@ -129,22 +129,39 @@ async def upload_drawing(
     db.add(drawing)
     await db.flush()  # get drawing.id before commit
 
-    # Process PDF
-    processor = PDFProcessor()
-    scale_info = processor.detect_scale(meta["file_path"])
-    layout = processor.extract_text_and_layout(meta["file_path"])
-    canvas_json = processor.pdf_to_canvas_json(meta["file_path"], page_number=1)
-    dims = processor.detect_dimensions(meta["file_path"])
+    # Process file based on extension
+    if meta["file_path"].endswith(".pdf"):
+        processor = PDFProcessor()
+        scale_info = processor.detect_scale(meta["file_path"])
+        layout_data = processor.extract_text_and_layout(meta["file_path"])
+        canvas_json = processor.pdf_to_canvas_json(meta["file_path"], page_number=1)
+        dims = processor.detect_dimensions(meta["file_path"])
+        extracted_data = _layout_to_extracted_data(layout_data)
+        total_pages = layout_data["total_pages"]
+    elif meta["file_path"].endswith(".dxf"):
+        from app.utils.dxf_parser import DXFEntityExtractor
+        extractor = DXFEntityExtractor(meta["file_path"])
+        extracted_data = extractor.extract_all_entities()
+        canvas_json = extractor.to_canvas_json()
+        dims_list = extractor.extract_dimensions_as_list()
+        dims = [
+            type('obj', (object,), {'text': d['text'], 'value': d['measurement'], 'unit': '', 'page_number': 1})
+            for d in dims_list
+        ]
+        scale_info = type('obj', (object,), {
+            'scale_text': extracted_data["header_info"]["units"],
+            'confidence': 1.0,
+            'method': 'DXF_HEADER'
+        })
+        total_pages = 1
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported file format")
 
     # Update drawing with detected scale
     if scale_info.scale_text:
         drawing.scale = scale_info.scale_text
 
     # Generate quantity suggestions
-    # For PDF, we build a minimal "extracted_data" from layout (no DXF entities)
-    # The federation engine will find very little from a PDF — that's expected.
-    # The main take-off for PDFs is still manual (measurement tools in the UI).
-    extracted_data = _layout_to_extracted_data(layout)
     engine = FederationEngine(str(project_id))
     engine.add_from_drawing(str(drawing.id), disc_enum, extracted_data)
     suggestion_count = await _save_suggestions(db, project_id, drawing.id, engine)
@@ -157,7 +174,7 @@ async def upload_drawing(
         "scale": scale_info.scale_text,
         "scale_confidence": scale_info.confidence,
         "scale_method": scale_info.method,
-        "total_pages": layout["total_pages"],
+        "total_pages": total_pages,
         "dimensions_detected": len(dims),
         "dimensions": [
             {"text": d.text, "value": d.value, "unit": d.unit, "page": d.page_number}

@@ -2,7 +2,7 @@
 Export utilities — Excel (.xlsx) and PDF for BOQ and BBS.
 """
 import io
-from datetime import datetime
+from datetime import datetime, timezone
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, numbers
 from openpyxl.utils import get_column_letter
@@ -33,7 +33,7 @@ def export_boq_excel(boq: dict, project_name: str) -> bytes:
     ws.append([f"BILL OF QUANTITIES — {project_name}"])
     ws["A1"].font = Font(bold=True, size=14)
     ws.append([f"Section: {boq['section']}", "", f"Currency: {boq['currency']}"])
-    ws.append([f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC"])
+    ws.append([f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC"])
     ws.append([])
 
     headers = ["#", "Description", "Unit", "Quantity", "Unit Rate (ETB)", "Amount (ETB)", "Notes"]
@@ -165,5 +165,75 @@ def export_boq_pdf(boq: dict, project_name: str) -> bytes:
         ("ALIGN", (3, 1), (-1, -1), "RIGHT"),
     ]))
     story.append(t)
+    doc.build(story)
+    return buf.getvalue()
+
+
+def export_bbs_pdf(bars: list[dict], cutting_list: list[dict], project_name: str) -> bytes:
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, title=f"BBS — {project_name}")
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph(f"<b>BAR BENDING SCHEDULE</b>", styles["Title"]))
+    story.append(Paragraph(f"Project: {project_name} | Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC", styles["Normal"]))
+    story.append(Spacer(1, 12))
+
+    # --- BBS Table ---
+    story.append(Paragraph("<b>Detailed Schedule</b>", styles["Heading2"]))
+    story.append(Spacer(1, 6))
+
+    bbs_headers = ["Mark", "Member", "Dia", "Shape", "Qty", "Cut (m)", "Total Wt (kg)"]
+    bbs_data = [bbs_headers]
+    for bar in bars:
+        bbs_data.append([
+            bar.get("bar_mark", ""),
+            bar.get("member_name", ""),
+            f"Ø{bar.get('bar_diameter_mm')}",
+            bar.get("bar_shape", ""),
+            str(bar.get("quantity")),
+            f"{bar.get('cutting_length_m'):.3f}",
+            f"{bar.get('total_weight_kg'):.3f}",
+        ])
+
+    t_bbs = Table(bbs_data, repeatRows=1)
+    t_bbs.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#D9E1F2")]),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("ALIGN", (4, 1), (-1, -1), "RIGHT"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(t_bbs)
+    story.append(Spacer(1, 20))
+
+    # --- Cutting List Table ---
+    story.append(Paragraph("<b>Cutting List (Summary)</b>", styles["Heading2"]))
+    story.append(Spacer(1, 6))
+
+    cl_headers = ["Diameter", "Cutting Length (m)", "Total Qty", "Total Weight (kg)"]
+    cl_data = [cl_headers]
+    for item in cutting_list:
+        cl_data.append([
+            f"Ø{item['diameter_mm']}mm",
+            f"{item['cutting_length_m']:.3f}",
+            str(item["total_qty"]),
+            f"{item['total_weight_kg']:.3f}",
+        ])
+
+    t_cl = Table(cl_data, repeatRows=1)
+    t_cl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1F4E79")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#D9E1F2")]),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+    ]))
+    story.append(t_cl)
+
     doc.build(story)
     return buf.getvalue()

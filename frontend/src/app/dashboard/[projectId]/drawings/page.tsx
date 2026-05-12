@@ -40,7 +40,12 @@ export default function DrawingsPage() {
   }, [projectId, category]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop, accept: { "application/pdf": [".pdf"] },
+    onDrop,
+    accept: {
+      "application/pdf": [".pdf"],
+      "application/dxf": [".dxf"],
+      "image/vnd.dxf": [".dxf"],
+    },
   });
 
   async function handleDelete(id: string) {
@@ -84,9 +89,9 @@ export default function DrawingsPage() {
               <input {...getInputProps()} />
               <Upload size={32} className="mx-auto text-outline mb-3" />
               <p className="text-on-surface font-medium">
-                {isDragActive ? "Drop files here" : "Drag & drop PDF files, or click to browse"}
+                {isDragActive ? "Drop files here" : "Drag & drop PDF or DXF files, or click to browse"}
               </p>
-              <p className="text-on-surface-variant text-sm mt-1">Max 100MB per file · PDF only</p>
+              <p className="text-on-surface-variant text-sm mt-1">Max 100MB per file · PDF or DXF</p>
             </div>
             {uploading && (
               <p className="text-sm text-accent animate-pulse flex items-center gap-2">

@@ -20,7 +20,8 @@ httpx==0.27.0
 aiosqlite==0.20.0
 
 # ── Optional: DXF support (Phase 2 UI, available now for admin/testing) ───────
-# pip install ezdxf==0.18.1 shapely==2.0.2
+ezdxf==0.18.1
+shapely==2.0.2
 
 # ── Optional: OCR for scanned PDFs (heavy, ~1.5GB) ────────────────────────────
 # pip install paddleocr==2.7.0.3 paddlepaddle-tiny pymupdf==1.23.8 opencv-python==4.8.1.78

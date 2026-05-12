@@ -5,7 +5,7 @@ import { useProjectStore } from "@/store/projectStore";
 import { api } from "@/lib/api";
 import type { BBSBar, BBSBarCreate, BarShape, CuttingListItem, Section } from "@/types";
 import { calcCuttingLength, calcWeight, calcLapLength } from "@/lib/calculations";
-import { Plus, Trash2, FileSpreadsheet, ChevronDown } from "lucide-react";
+import { Plus, Trash2, FileSpreadsheet, FileText, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DIAMETERS = [6, 8, 10, 12, 16, 20, 25, 32];
@@ -67,6 +67,12 @@ export default function BBSPage() {
     const res = await api.post(`/projects/${projectId}/bbs/export-excel`, {}, { responseType: "blob" });
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a"); a.href = url; a.download = "BBS.xlsx"; a.click();
+  }
+
+  async function exportPdf() {
+    const res = await api.post(`/projects/${projectId}/bbs/export-pdf`, {}, { responseType: "blob" });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement("a"); a.href = url; a.download = "BBS.pdf"; a.click();
   }
 
   function upd(field: keyof BBSBarCreate, value: unknown) {
@@ -179,6 +185,9 @@ export default function BBSPage() {
                 <div className="col-span-2 md:col-span-4 flex justify-end gap-2">
                   <button onClick={exportExcel} type="button" className="btn-secondary flex items-center gap-2">
                     <FileSpreadsheet size={14} /> Export Excel
+                  </button>
+                  <button onClick={exportPdf} type="button" className="btn-secondary flex items-center gap-2">
+                    <FileText size={14} /> Export PDF
                   </button>
                   <button type="submit" className="btn-primary flex items-center gap-2">
                     <Plus size={15} /> Add Bar
