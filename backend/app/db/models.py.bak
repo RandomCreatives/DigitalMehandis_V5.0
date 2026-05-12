@@ -43,6 +43,11 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
+    project: Mapped["Project"] = relationship("Project", back_populates="federated_quantities")
+    boq_item_sources: Mapped[list["BOQItemSource"]] = relationship("BOQItemSource", back_populates="federated_quantity")
+
+    boq_item_sources: Mapped[list["BOQItemSource"]] = relationship("BOQItemSource", back_populates="federated_quantity")
+
     projects: Mapped[list["Project"]] = relationship("Project", back_populates="user", cascade="all, delete-orphan")
 
 
@@ -73,8 +78,6 @@ class Project(Base):
     elements: Mapped[list["ProjectElement"]] = relationship("ProjectElement", back_populates="project", cascade="all, delete-orphan")
     boq_items: Mapped[list["BOQItem"]] = relationship("BOQItem", back_populates="project", cascade="all, delete-orphan")
     audit_logs: Mapped[list["AuditLog"]] = relationship("AuditLog", back_populates="project", cascade="all, delete-orphan")
-    suggested_quantities: Mapped[list["SuggestedQuantity"]] = relationship("SuggestedQuantity", back_populates="project", cascade="all, delete-orphan")
-    federated_quantities: Mapped[list["FederatedQuantity"]] = relationship("FederatedQuantity", back_populates="project", cascade="all, delete-orphan")
 
 
 class Drawing(Base):
@@ -94,8 +97,6 @@ class Drawing(Base):
 
     project: Mapped["Project"] = relationship("Project", back_populates="drawings")
     pages: Mapped[list["DrawingPage"]] = relationship("DrawingPage", back_populates="drawing", cascade="all, delete-orphan")
-    suggested_quantities: Mapped[list["SuggestedQuantity"]] = relationship("SuggestedQuantity", back_populates="drawing")
-    federated_quantities: Mapped[list["FederatedQuantity"]] = relationship("FederatedQuantity", back_populates="drawing")
 
 
 class DrawingPage(Base):
@@ -168,7 +169,6 @@ class Measurement(Base):
 
     page: Mapped["DrawingPage"] = relationship("DrawingPage", back_populates="measurements")
     element: Mapped["ProjectElement | None"] = relationship("ProjectElement", back_populates="measurements")
-    boq_item_sources: Mapped[list["BOQItemSource"]] = relationship("BOQItemSource", back_populates="measurement")
 
 
 class TakeoffItem(Base):
@@ -186,6 +186,66 @@ class TakeoffItem(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
     project: Mapped["Project"] = relationship("Project", back_populates="takeoff_items")
+
+
+# ── Final BOQ Items (Phase 2) ────────────────────────────────────────────────
+
+class BOQItem(Base):
+    __tablename__ = "boq_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+
+    item_code: Mapped[str | None] = mapped_column(String(50))
+    description: Mapped[str] = mapped_column(String(500), nullable=False)
+    unit: Mapped[str] = mapped_column(String(50), nullable=False)
+    quantity: Mapped[float] = mapped_column(Numeric(15, 3), nullable=False)
+    rate: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
+
+    section: Mapped[str] = mapped_column(String(50), default="SUBSTRUCTURE")
+    is_manual: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    project: Mapped["Project"] = relationship("Project", back_populates="boq_items")
+    sources: Mapped[list["BOQItemSource"]] = relationship("BOQItemSource", back_populates="boq_item", cascade="all, delete-orphan")
+
+
+class BOQItemSource(Base):
+    """Links BOQItem to its origin (FederatedQuantity or Measurement)"""
+    __tablename__ = "boq_item_sources"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    boq_item_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("boq_items.id", ondelete="CASCADE"), nullable=False)
+
+    # Source can be a FederatedQuantity (approved from drawing extraction)
+    federated_quantity_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("federated_quantities.id", ondelete="SET NULL"))
+
+    # Or source can be a direct manual Measurement from the canvas (future-proofing)
+    measurement_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("measurements.id", ondelete="SET NULL"))
+
+    contribution_value: Mapped[float] = mapped_column(Numeric(15, 3), nullable=False)
+
+    boq_item: Mapped["BOQItem"] = relationship("BOQItem", back_populates="sources")
+    federated_quantity: Mapped["FederatedQuantity | None"] = relationship("FederatedQuantity", back_populates="boq_item_sources")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    action_category: Mapped[str] = mapped_column(String(50), nullable=False) # DRAWING, MEASUREMENT, BOQ, BBS, RATE
+    action_type: Mapped[str] = mapped_column(String(50), nullable=False)     # CREATE, UPDATE, DELETE, EXPORT
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Store old/new values as JSON for traceability
+    payload: Mapped[str | None] = mapped_column(Text)
+
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    project: Mapped["Project"] = relationship("Project", back_populates="audit_logs")
 
 
 class Rate(Base):
@@ -274,9 +334,6 @@ class SuggestedQuantity(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    project: Mapped["Project"] = relationship("Project", back_populates="suggested_quantities")
-    drawing: Mapped["Drawing | None"] = relationship("Drawing", back_populates="suggested_quantities")
-
 
 # ── Federated Quantities (approved, used in BOQ) ──────────────────────────────
 
@@ -304,68 +361,3 @@ class FederatedQuantity(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
-
-    project: Mapped["Project"] = relationship("Project", back_populates="federated_quantities")
-    drawing: Mapped["Drawing | None"] = relationship("Drawing", back_populates="federated_quantities")
-    boq_item_sources: Mapped[list["BOQItemSource"]] = relationship("BOQItemSource", back_populates="federated_quantity")
-
-
-# ── Final BOQ Items (Phase 2) ────────────────────────────────────────────────
-
-class BOQItem(Base):
-    __tablename__ = "boq_items"
-
-    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-
-    item_code: Mapped[str | None] = mapped_column(String(50))
-    description: Mapped[str] = mapped_column(String(500), nullable=False)
-    unit: Mapped[str] = mapped_column(String(50), nullable=False)
-    quantity: Mapped[float] = mapped_column(Numeric(15, 3), nullable=False)
-    rate: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-    amount: Mapped[float] = mapped_column(Numeric(15, 2), nullable=False)
-
-    section: Mapped[str] = mapped_column(String(50), default="SUBSTRUCTURE")
-    is_manual: Mapped[bool] = mapped_column(Boolean, default=False)
-
-    project: Mapped["Project"] = relationship("Project", back_populates="boq_items")
-    sources: Mapped[list["BOQItemSource"]] = relationship("BOQItemSource", back_populates="boq_item", cascade="all, delete-orphan")
-
-
-class BOQItemSource(Base):
-    """Links BOQItem to its origin (FederatedQuantity or Measurement)"""
-    __tablename__ = "boq_item_sources"
-
-    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
-    boq_item_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("boq_items.id", ondelete="CASCADE"), nullable=False)
-
-    # Source can be a FederatedQuantity (approved from drawing extraction)
-    federated_quantity_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("federated_quantities.id", ondelete="SET NULL"))
-
-    # Or source can be a direct manual Measurement from the canvas (future-proofing)
-    measurement_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), ForeignKey("measurements.id", ondelete="SET NULL"))
-
-    contribution_value: Mapped[float] = mapped_column(Numeric(15, 3), nullable=False)
-
-    boq_item: Mapped["BOQItem"] = relationship("BOQItem", back_populates="sources")
-    federated_quantity: Mapped["FederatedQuantity | None"] = relationship("FederatedQuantity", back_populates="boq_item_sources")
-    measurement: Mapped["Measurement | None"] = relationship("Measurement", back_populates="boq_item_sources")
-
-
-class AuditLog(Base):
-    __tablename__ = "audit_logs"
-
-    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    user_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-
-    action_category: Mapped[str] = mapped_column(String(50), nullable=False) # DRAWING, MEASUREMENT, BOQ, BBS, RATE
-    action_type: Mapped[str] = mapped_column(String(50), nullable=False)     # CREATE, UPDATE, DELETE, EXPORT
-    description: Mapped[str] = mapped_column(Text, nullable=False)
-
-    # Store old/new values as JSON for traceability
-    payload: Mapped[str | None] = mapped_column(Text)
-
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
-
-    project: Mapped["Project"] = relationship("Project", back_populates="audit_logs")
