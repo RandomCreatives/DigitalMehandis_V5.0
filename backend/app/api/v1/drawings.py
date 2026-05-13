@@ -181,9 +181,11 @@ async def upload_drawing(
             for d in dims[:50]
         ],
         "canvas_json": canvas_json,
+        "layer_list": extracted_data.get("layer_list") if meta["file_path"].endswith(".dxf") else [],
+        "summary": extracted_data.get("summary") if meta["file_path"].endswith(".dxf") else {},
         "suggestions_generated": suggestion_count,
         "message": (
-            f"PDF processed. {suggestion_count} quantity suggestions generated — "
+            f"Drawing processed. {suggestion_count} quantity suggestions generated — "
             "review them in the Suggested Quantities tab."
         ),
     }

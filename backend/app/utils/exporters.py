@@ -169,6 +169,40 @@ def export_boq_pdf(boq: dict, project_name: str) -> bytes:
     return buf.getvalue()
 
 
+def export_rates_excel(rates: list, project_name: str) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Rates"
+
+    ws.append([f"MATERIAL RATES — {project_name}"])
+    ws["A1"].font = Font(bold=True, size=14)
+    ws.append([f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC"])
+    ws.append([])
+
+    headers = ["Item Code", "Description", "Unit", "Rate (ETB)", "Source", "Region"]
+    ws.append(headers)
+    hr = ws.max_row
+    for ci in range(1, len(headers) + 1):
+        c = ws.cell(row=hr, column=ci)
+        c.fill = HEADER_FILL
+        c.font = HEADER_FONT
+
+    for rate in rates:
+        ws.append([
+            rate.item_code or "",
+            rate.description,
+            rate.unit,
+            float(rate.rate_per_unit),
+            rate.rate_source or "",
+            rate.region or "",
+        ])
+
+    _auto_width(ws)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def export_bbs_pdf(bars: list[dict], cutting_list: list[dict], project_name: str) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, title=f"BBS — {project_name}")

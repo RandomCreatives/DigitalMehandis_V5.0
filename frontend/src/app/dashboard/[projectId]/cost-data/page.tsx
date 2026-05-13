@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
-import { Database, Search, Plus, ChevronDown, ChevronRight, BookOpen, RefreshCw } from "lucide-react";
+import { useParams } from "next/navigation";
+import { api } from "@/lib/api";
+import { Database, Search, Plus, ChevronDown, ChevronRight, BookOpen, RefreshCw, Check, FileSpreadsheet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Placeholder categories — will be replaced with live government rate data
@@ -58,9 +60,11 @@ const CATEGORIES = [
 ];
 
 export default function CostDataPage() {
+  const { projectId } = useParams<{ projectId: string }>();
   const [search, setSearch]         = useState("");
   const [expanded, setExpanded]     = useState<Set<string>>(new Set(["01"]));
   const [activeRegion, setRegion]   = useState("Addis Ababa");
+  const [added, setAdded]           = useState<Set<string>>(new Set());
 
   const REGIONS = ["Addis Ababa", "Dire Dawa", "Mekelle", "Hawassa", "Bahir Dar", "Adama"];
 
@@ -127,6 +131,9 @@ export default function CostDataPage() {
             {REGIONS.map((r) => <option key={r}>{r}</option>)}
           </select>
         </div>
+        <button onClick={exportExcel} className="btn-ghost flex items-center gap-1.5 text-sm text-primary">
+          <FileSpreadsheet size={14} /> Export Rates
+        </button>
         <button className="btn-ghost flex items-center gap-1.5 text-sm opacity-50 cursor-not-allowed" disabled>
           <Plus size={14} /> Add Custom Rate
         </button>
@@ -172,10 +179,30 @@ export default function CostDataPage() {
                       </td>
                       <td className="text-center">
                         <button
-                          className="text-xs font-semibold text-accent hover:underline"
+                          onClick={async () => {
+                            await api.post(`/projects/${projectId}/boq-v2/items`, {
+                              item_code: item.code,
+                              description: item.description,
+                              unit: item.unit,
+                              quantity: 0,
+                              rate: item.rate,
+                              amount: 0,
+                              is_manual: true
+                            });
+                            setAdded(prev => new Set(prev).add(item.code));
+                            setTimeout(() => setAdded(prev => {
+                               const next = new Set(prev);
+                               next.delete(item.code);
+                               return next;
+                            }), 2000);
+                          }}
+                          className={cn(
+                            "text-xs font-semibold hover:underline flex items-center justify-center gap-1 mx-auto",
+                            added.has(item.code) ? "text-green-600" : "text-accent"
+                          )}
                           title="Use this rate in BOQ"
                         >
-                          Use Rate
+                          {added.has(item.code) ? <><Check size={12}/> Added</> : "Use Rate"}
                         </button>
                       </td>
                     </tr>

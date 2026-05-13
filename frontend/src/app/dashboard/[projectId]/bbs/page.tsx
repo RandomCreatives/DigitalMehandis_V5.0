@@ -5,7 +5,7 @@ import { useProjectStore } from "@/store/projectStore";
 import { api } from "@/lib/api";
 import type { BBSBar, BBSBarCreate, BarShape, CuttingListItem, Section } from "@/types";
 import { calcCuttingLength, calcWeight, calcLapLength } from "@/lib/calculations";
-import { Plus, Trash2, FileSpreadsheet, FileText, ChevronDown } from "lucide-react";
+import { Plus, Trash2, FileSpreadsheet, FileText, ChevronDown, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DIAMETERS = [6, 8, 10, 12, 16, 20, 25, 32];
@@ -75,6 +75,11 @@ export default function BBSPage() {
     const a = document.createElement("a"); a.href = url; a.download = "BBS.pdf"; a.click();
   }
 
+  async function syncToBoq() {
+    await api.post(`/projects/${projectId}/bbs/sync-to-boq`);
+    alert("BBS reinforcement totals synced to BOQ approved quantities!");
+  }
+
   function upd(field: keyof BBSBarCreate, value: unknown) {
     setForm((f) => ({ ...f, [field]: value }));
   }
@@ -105,6 +110,9 @@ export default function BBSPage() {
                 {s.charAt(0) + s.slice(1).toLowerCase()}
               </button>
             ))}
+            <button onClick={syncToBoq} className="btn-ghost py-1.5 px-3 flex items-center gap-2 text-xs font-bold text-accent">
+               <RefreshCw size={13} /> Sync to BOQ
+            </button>
           </div>
         </div>
 
