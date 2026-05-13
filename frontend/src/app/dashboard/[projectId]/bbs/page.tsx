@@ -5,7 +5,7 @@ import { useProjectStore } from "@/store/projectStore";
 import { api } from "@/lib/api";
 import type { BBSBar, BBSBarCreate, BarShape, CuttingListItem, Section } from "@/types";
 import { calcCuttingLength, calcWeight, calcLapLength } from "@/lib/calculations";
-import { Plus, Trash2, FileSpreadsheet, ChevronDown } from "lucide-react";
+import { Plus, Trash2, FileSpreadsheet, ChevronDown, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DIAMETERS = [6, 8, 10, 12, 16, 20, 25, 32];
@@ -30,6 +30,8 @@ export default function BBSPage() {
   const [form, setForm]               = useState<BBSBarCreate>(EMPTY);
   const [activeSection, setActiveSection] = useState<Section>("SUBSTRUCTURE");
   const [showCutting, setShowCutting] = useState(false);
+  const [pushingToBoq, setPushingToBoq] = useState(false);
+  const [pushResult, setPushResult] = useState<string | null>(null);
 
   useEffect(() => { fetchProject(projectId); }, [projectId, fetchProject]);
 
@@ -67,6 +69,21 @@ export default function BBSPage() {
     const res = await api.post(`/projects/${projectId}/bbs/export-excel`, {}, { responseType: "blob" });
     const url = URL.createObjectURL(res.data);
     const a = document.createElement("a"); a.href = url; a.download = "BBS.xlsx"; a.click();
+  }
+
+  async function pushToBoq() {
+    setPushingToBoq(true);
+    setPushResult(null);
+    try {
+      const { data } = await api.post(
+        `/projects/${projectId}/bbs/push-to-boq?section=${activeSection}`
+      );
+      setPushResult(`✓ ${data.message}`);
+    } catch {
+      setPushResult("Failed to push to BOQ");
+    } finally {
+      setPushingToBoq(false);
+    }
   }
 
   function upd(field: keyof BBSBarCreate, value: unknown) {
@@ -180,10 +197,25 @@ export default function BBSPage() {
                   <button onClick={exportExcel} type="button" className="btn-secondary flex items-center gap-2">
                     <FileSpreadsheet size={14} /> Export Excel
                   </button>
+                  <button
+                    type="button"
+                    onClick={pushToBoq}
+                    disabled={pushingToBoq || filtered.length === 0}
+                    className="btn-secondary flex items-center gap-2 disabled:opacity-40"
+                  >
+                    <Layers size={14} /> {pushingToBoq ? "Pushing…" : "Push to BOQ"}
+                  </button>
                   <button type="submit" className="btn-primary flex items-center gap-2">
                     <Plus size={15} /> Add Bar
                   </button>
                 </div>
+                {pushResult && (
+                  <div className="col-span-2 md:col-span-4">
+                    <p className={`text-sm px-3 py-2 rounded-lg ${pushResult.startsWith("✓") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                      {pushResult}
+                    </p>
+                  </div>
+                )}
               </form>
             </div>
 

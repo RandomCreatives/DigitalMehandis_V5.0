@@ -3,7 +3,7 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect } from "react";
 import { useProjectStore } from "@/store/projectStore";
-import { Ruler, Sparkles, Table2, Layers, BarChart3, Database, ChevronLeft, ChevronRight, SlidersHorizontal, ClipboardList, ScrollText } from "lucide-react";
+import { Ruler, Sparkles, Table2, Layers, BarChart3, Database, ChevronLeft, ChevronRight, SlidersHorizontal, ClipboardList, ScrollText, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -14,6 +14,7 @@ const TABS = [
   { label: "BOQ",         slug: "boq",         icon: Layers },
   { label: "BOQ Items",   slug: "boq-items",   icon: ClipboardList },
   { label: "Bar Schedule",slug: "bbs",         icon: BarChart3 },
+  { label: "Rates",       slug: "rates",       icon: DollarSign },
   { label: "Audit Log",   slug: "audit-log",   icon: ScrollText },
   { label: "Cost Data",   slug: "cost-data",   icon: Database },
 ];
