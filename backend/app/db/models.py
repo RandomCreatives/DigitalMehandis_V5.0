@@ -5,24 +5,38 @@ from sqlalchemy import (
     DateTime, CheckConstraint
 )
 from sqlalchemy import TypeDecorator
+from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.db.base import Base
 
 
 class GUID(TypeDecorator):
-    """Platform-independent UUID type. Uses String(36) for SQLite, native UUID for PostgreSQL."""
+    """
+    Backward-compatible UUID type kept for Phase 1 models.
+    Uses native PostgreSQL UUID when connected to PostgreSQL,
+    falls back to String(36) for SQLite (test compatibility).
+    """
     impl = String(36)
     cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(PGUUID(as_uuid=True))
+        return dialect.type_descriptor(String(36))
 
     def process_bind_param(self, value, dialect):
         if value is None:
             return None
+        if dialect.name == "postgresql":
+            return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
         return str(value)
 
     def process_result_value(self, value, dialect):
         if value is None:
             return None
+        if isinstance(value, uuid.UUID):
+            return value
         return uuid.UUID(value)
-from app.db.base import Base
 
 
 def now_utc():
@@ -68,6 +82,29 @@ class Project(Base):
     rates: Mapped[list["Rate"]] = relationship("Rate", back_populates="project", cascade="all, delete-orphan")
     bbs_bars: Mapped[list["BBSBar"]] = relationship("BBSBar", back_populates="project", cascade="all, delete-orphan")
     boq_outputs: Mapped[list["BOQOutput"]] = relationship("BOQOutput", back_populates="project", cascade="all, delete-orphan")
+
+    # ── Phase 2 relationships ─────────────────────────────────────────────────
+    # (models defined in models_phase2.py, imported via Base metadata)
+    calibrations: Mapped[list["DrawingCalibration"]] = relationship(
+        "DrawingCalibration", back_populates="project", cascade="all, delete-orphan",
+        foreign_keys="DrawingCalibration.project_id",
+    )
+    measurements: Mapped[list["Measurement"]] = relationship(
+        "Measurement", back_populates="project", cascade="all, delete-orphan",
+        foreign_keys="Measurement.project_id",
+    )
+    project_elements: Mapped[list["ProjectElement"]] = relationship(
+        "ProjectElement", back_populates="project", cascade="all, delete-orphan",
+        foreign_keys="ProjectElement.project_id",
+    )
+    boq_items: Mapped[list["BOQItem"]] = relationship(
+        "BOQItem", back_populates="project", cascade="all, delete-orphan",
+        foreign_keys="BOQItem.project_id",
+    )
+    audit_logs: Mapped[list["AuditLog"]] = relationship(
+        "AuditLog", back_populates="project",
+        foreign_keys="AuditLog.project_id",
+    )
 
 
 class Drawing(Base):
