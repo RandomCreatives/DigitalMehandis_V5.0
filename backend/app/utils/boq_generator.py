@@ -21,7 +21,7 @@ class BOQGenerator:
         total = 0.0
 
         for idx, item in enumerate(items, 1):
-            rate = self._match_rate(item.description, rates)
+            rate = self._match_rate(item, rates)
             if rate is None:
                 continue
 
@@ -62,9 +62,34 @@ class BOQGenerator:
         return result.scalars().all()
 
     @staticmethod
-    def _match_rate(description: str, rates: list[Rate]) -> Rate | None:
-        desc_lower = description.lower()
+    def _match_rate(item: TakeoffItem, rates: list[Rate]) -> Rate | None:
+        """
+        Tiered matching logic:
+        1. Exact item_code + unit match
+        2. Exact description + unit match (case-insensitive)
+        3. Substring description match (first one found)
+        """
+        item_desc = item.description.lower().strip()
+        item_code = (item.item_code or "").lower().strip()
+        item_unit = (item.unit or "").lower().strip()
+
+        # Tier 1: Exact Code + Unit
+        if item_code:
+            for rate in rates:
+                if (rate.item_code or "").lower().strip() == item_code and \
+                   (rate.unit or "").lower().strip() == item_unit:
+                    return rate
+
+        # Tier 2: Exact Description + Unit
         for rate in rates:
-            if rate.description.lower() in desc_lower or desc_lower in rate.description.lower():
+            if rate.description.lower().strip() == item_desc and \
+               (rate.unit or "").lower().strip() == item_unit:
                 return rate
+
+        # Tier 3: Substring Description Match
+        for rate in rates:
+            rate_desc = rate.description.lower().strip()
+            if rate_desc in item_desc or item_desc in rate_desc:
+                return rate
+
         return None

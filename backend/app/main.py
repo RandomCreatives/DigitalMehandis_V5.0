@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
-from app.api.v1 import auth, projects, drawings, takeoff, bbs, boq, rates
+from app.api.v1 import auth, projects, drawings, takeoff, bbs, boq, rates, calibration, measurements, boq_v2, audit
 
 settings = get_settings()
 
@@ -29,6 +29,10 @@ app.include_router(takeoff.router, prefix=PREFIX)
 app.include_router(bbs.router, prefix=PREFIX)
 app.include_router(boq.router, prefix=PREFIX)
 app.include_router(rates.router, prefix=PREFIX)
+app.include_router(calibration.router, prefix=PREFIX)
+app.include_router(measurements.router, prefix=PREFIX)
+app.include_router(boq_v2.router, prefix=PREFIX)
+app.include_router(audit.router, prefix=PREFIX)
 
 
 @app.get("/health")

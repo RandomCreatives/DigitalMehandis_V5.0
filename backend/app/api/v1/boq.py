@@ -8,7 +8,7 @@ from app.db.models import Project, User, Rate, BOQOutput, BBSBar
 from app.schemas.boq import BOQResult, BOQOutputOut, RateCreate, RateOut
 from app.dependencies import get_current_user
 from app.utils.boq_generator import BOQGenerator
-from app.utils.exporters import export_boq_excel, export_boq_pdf, export_bbs_excel
+from app.utils.exporters import export_boq_excel, export_boq_pdf, export_bbs_excel, export_bbs_pdf, export_rates_excel
 from app.api.v1.bbs import _enrich
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["boq"])
@@ -144,4 +144,50 @@ async def export_bbs_to_excel(
         content=xlsx_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="BBS_{project.name}.xlsx"'},
+    )
+
+
+@router.post("/bbs/export-pdf")
+async def export_bbs_to_pdf(
+    project_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await _check_project(project_id, user, db)
+    result = await db.execute(select(BBSBar).where(BBSBar.project_id == project_id))
+    bars = [_enrich(b) for b in result.scalars().all()]
+
+    # Build cutting list
+    groups: dict = {}
+    for bar in bars:
+        key = (bar["bar_diameter_mm"], bar["cutting_length_m"])
+        if key not in groups:
+            groups[key] = {"diameter_mm": bar["bar_diameter_mm"], "cutting_length_m": bar["cutting_length_m"], "total_qty": 0, "total_weight_kg": 0.0}
+        groups[key]["total_qty"] += bar["quantity"]
+        groups[key]["total_weight_kg"] = round(groups[key]["total_weight_kg"] + bar["total_weight_kg"], 3)
+
+    pdf_bytes = export_bbs_pdf(bars, list(groups.values()), project.name)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="BBS_{project.name}.pdf"'},
+    )
+
+
+@router.get("/rates/export-excel")
+async def export_rates_to_excel(
+    project_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await _check_project(project_id, user, db)
+    result = await db.execute(
+        select(Rate).where((Rate.project_id == project_id) | (Rate.project_id.is_(None)))
+    )
+    rates = result.scalars().all()
+    xlsx_bytes = export_rates_excel(rates, project.name)
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="Rates_{project.name}.xlsx"'},
     )

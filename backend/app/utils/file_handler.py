@@ -9,8 +9,8 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-ALLOWED_MIME_TYPES = {"application/pdf"}
-ALLOWED_EXTENSIONS = {".pdf"}
+ALLOWED_MIME_TYPES = {"application/pdf", "image/vnd.dwg", "image/vnd.dxf", "application/dxf"}
+ALLOWED_EXTENSIONS = {".pdf", ".dxf"}
 
 
 async def save_upload(file: UploadFile, project_id: str) -> dict:
@@ -20,7 +20,7 @@ async def save_upload(file: UploadFile, project_id: str) -> dict:
     """
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}. Only PDF is supported in Phase 1.")
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}. Supported: PDF, DXF.")
 
     content = await file.read()
     size_mb = len(content) / (1024 * 1024)
@@ -35,7 +35,9 @@ async def save_upload(file: UploadFile, project_id: str) -> dict:
     dest = upload_dir / f"{file_id}{ext}"
     dest.write_bytes(content)
 
-    page_count = _count_pdf_pages(content)
+    page_count = 1
+    if ext == ".pdf":
+        page_count = _count_pdf_pages(content)
 
     return {
         "file_path": str(dest),

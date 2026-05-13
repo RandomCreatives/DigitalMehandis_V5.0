@@ -5,7 +5,7 @@ import { useDropzone } from "react-dropzone";
 import { useProjectStore } from "@/store/projectStore";
 import { api } from "@/lib/api";
 import type { Drawing, DrawingCategory } from "@/types";
-import { Upload, Trash2, Eye, FileText, X } from "lucide-react";
+import { Upload, Trash2, Eye, FileText, X, Layers } from "lucide-react";
 
 const CATEGORIES: DrawingCategory[] = ["ARCHITECTURAL", "STRUCTURAL", "ELECTRICAL", "SANITARY"];
 
@@ -17,6 +17,7 @@ export default function DrawingsPage() {
   const [category, setCategory] = useState<DrawingCategory>("ARCHITECTURAL");
   const [viewUrl, setViewUrl] = useState<string | null>(null);
   const [viewName, setViewName] = useState("");
+  const [selectedDrawing, setSelectedDrawing] = useState<Drawing | null>(null);
 
   useEffect(() => { fetchProject(projectId); }, [projectId, fetchProject]);
 
@@ -40,7 +41,12 @@ export default function DrawingsPage() {
   }, [projectId, category]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop, accept: { "application/pdf": [".pdf"] },
+    onDrop,
+    accept: {
+      "application/pdf": [".pdf"],
+      "application/dxf": [".dxf"],
+      "image/vnd.dxf": [".dxf"],
+    },
   });
 
   async function handleDelete(id: string) {
@@ -54,6 +60,7 @@ export default function DrawingsPage() {
     const url = URL.createObjectURL(data);
     setViewUrl(url);
     setViewName(drawing.filename);
+    setSelectedDrawing(drawing);
   }
 
   function closeViewer() {
@@ -84,9 +91,9 @@ export default function DrawingsPage() {
               <input {...getInputProps()} />
               <Upload size={32} className="mx-auto text-outline mb-3" />
               <p className="text-on-surface font-medium">
-                {isDragActive ? "Drop files here" : "Drag & drop PDF files, or click to browse"}
+                {isDragActive ? "Drop files here" : "Drag & drop PDF or DXF files, or click to browse"}
               </p>
-              <p className="text-on-surface-variant text-sm mt-1">Max 100MB per file · PDF only</p>
+              <p className="text-on-surface-variant text-sm mt-1">Max 100MB per file · PDF or DXF</p>
             </div>
             {uploading && (
               <p className="text-sm text-accent animate-pulse flex items-center gap-2">
@@ -147,9 +154,16 @@ export default function DrawingsPage() {
                 <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide">Drawing Viewer</p>
                 <p className="text-sm font-medium text-on-surface">{viewName}</p>
               </div>
-              <button onClick={closeViewer} className="btn-ghost p-1.5" aria-label="Close viewer">
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2">
+                 {selectedDrawing?.filename.toLowerCase().endsWith(".dxf") && (
+                    <button className="btn-ghost p-1.5 text-primary" title="Layer Mapping">
+                       <Layers size={18} />
+                    </button>
+                 )}
+                 <button onClick={closeViewer} className="btn-ghost p-1.5" aria-label="Close viewer">
+                   <X size={16} />
+                 </button>
+              </div>
             </div>
             <iframe src={viewUrl} className="flex-1 w-full" title="PDF Viewer" />
           </div>

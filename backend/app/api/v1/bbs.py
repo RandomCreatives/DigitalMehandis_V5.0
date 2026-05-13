@@ -7,6 +7,7 @@ from app.db.models import BBSBar, Project, User
 from app.schemas.bbs import BBSBarCreate, BBSBarUpdate, BBSBarOut, CuttingListItem
 from app.dependencies import get_current_user
 from app.utils.bbs_calculator import BBSCalculator
+from app.db.models import FederatedQuantity
 
 router = APIRouter(prefix="/projects/{project_id}/bbs", tags=["bbs"])
 
@@ -135,3 +136,48 @@ async def cutting_list(project_id: UUID, user: User = Depends(get_current_user),
         groups[key]["total_weight_kg"] = round(groups[key]["total_weight_kg"] + enriched["total_weight_kg"], 3)
 
     return list(groups.values())
+
+
+@router.post("/sync-to-boq")
+async def sync_bbs_to_boq(project_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """
+    Summarize BBS reinforcement by diameter and sync to FederatedQuantity.
+    """
+    await _check_project(project_id, user, db)
+    result = await db.execute(select(BBSBar).where(BBSBar.project_id == project_id))
+    bars = result.scalars().all()
+
+    # Aggregate by diameter
+    by_dia: dict[int, float] = {}
+    for bar in bars:
+        enriched = _enrich(bar)
+        by_dia[bar.bar_diameter_mm] = by_dia.get(bar.bar_diameter_mm, 0.0) + enriched["total_weight_kg"]
+
+    # Update or create FederatedQuantity records
+    for dia, total_weight in by_dia.items():
+        desc = f"High yield deformed bar Ø{dia}mm"
+        # Check if exists
+        stmt = select(FederatedQuantity).where(
+            FederatedQuantity.project_id == project_id,
+            FederatedQuantity.element_description == desc
+        )
+        existing_res = await db.execute(stmt)
+        existing = existing_res.scalar_one_or_none()
+
+        if existing:
+            existing.quantity_value = total_weight
+        else:
+            fq = FederatedQuantity(
+                project_id=project_id,
+                discipline="STRUCTURAL",
+                element_category="REINFORCEMENT",
+                element_description=desc,
+                quantity_value=total_weight,
+                quantity_unit="kg",
+                section="SUPERSTRUCTURE", # Default
+                is_verified=True
+            )
+            db.add(fq)
+
+    await db.commit()
+    return {"message": f"Synced {len(by_dia)} reinforcement types to BOQ approved quantities"}
