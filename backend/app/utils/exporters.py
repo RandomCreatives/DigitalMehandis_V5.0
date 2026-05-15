@@ -167,3 +167,45 @@ def export_boq_pdf(boq: dict, project_name: str) -> bytes:
     story.append(t)
     doc.build(story)
     return buf.getvalue()
+
+
+def export_rates_excel(rates: list[dict], project_name: str) -> bytes:
+    """Export project rates to Excel."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Project Rates"
+
+    # Title
+    ws.append([f"PROJECT RATES — {project_name}"])
+    ws["A1"].font = Font(bold=True, size=14)
+    ws.append([f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC"])
+    ws.append([])
+
+    headers = ["Item Code", "Description", "Unit", "Rate (ETB)", "Source", "Region"]
+    ws.append(headers)
+    header_row = ws.max_row
+    for col_idx, _ in enumerate(headers, 1):
+        cell = ws.cell(row=header_row, column=col_idx)
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+        cell.alignment = Alignment(horizontal="center")
+
+    for i, rate in enumerate(rates):
+        row = [
+            rate.get("item_code", ""),
+            rate.get("description", ""),
+            rate.get("unit", ""),
+            rate.get("rate_per_unit", 0.0),
+            rate.get("rate_source", ""),
+            rate.get("region", ""),
+        ]
+        ws.append(row)
+        if i % 2 == 0:
+            for col_idx in range(1, len(row) + 1):
+                ws.cell(row=ws.max_row, column=col_idx).fill = ALT_FILL
+
+    _auto_width(ws)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

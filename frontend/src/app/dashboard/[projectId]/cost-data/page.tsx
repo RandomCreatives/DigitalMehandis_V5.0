@@ -90,7 +90,11 @@ export default function CostDataPage() {
         notes: `From Cost Data — MoUDC 2023 · ${activeRegion}`,
         sort_order: 0,
       });
-      setUsedRates((prev) => new Set([...prev, item.code]));
+      setUsedRates((prev) => {
+        const next = new Set(prev);
+        next.add(item.code);
+        return next;
+      });
     } catch {
       // ignore — user can retry
     } finally {

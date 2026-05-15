@@ -46,7 +46,7 @@ export default function BOQPage() {
     });
   }
 
-  const selectedLines = boq ? [...selected].map((i) => boq.lines[i]).filter(Boolean) : [];
+  const selectedLines = boq ? Array.from(selected).map((i) => boq.lines[i]).filter(Boolean) : [];
   const selectedSubtotal = selectedLines.reduce((s, l) => s + l.amount, 0);
 
   return (
