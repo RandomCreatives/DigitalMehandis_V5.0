@@ -89,7 +89,7 @@ async def _save_suggestions(
 @router.post(
     "/projects/{project_id}/drawings/upload",
     status_code=status.HTTP_201_CREATED,
-    summary="Upload a PDF drawing",
+    summary="Upload a PDF or DXF drawing",
 )
 async def upload_drawing(
     project_id: UUID,
@@ -100,9 +100,10 @@ async def upload_drawing(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Upload a PDF drawing.
+    Upload a drawing (PDF or DXF).
     - Saves the file
-    - Extracts scale, dimensions, and layout (pdfplumber; OCR if available)
+    - If PDF: Extracts scale, dimensions, and layout via PDFProcessor
+    - If DXF: Extracts entities, layers, and blocks via DXFEntityExtractor
     - Generates quantity suggestions (pending user approval)
     - Returns drawing metadata + suggestions summary
     """
@@ -114,7 +115,10 @@ async def upload_drawing(
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid discipline: {discipline}")
 
-    # Save file (validates PDF, checks size)
+    filename = (file.filename or "").lower()
+    is_dxf = filename.endswith(".dxf")
+
+    # Save file using shared utility
     meta = await save_upload(file, str(project_id))
 
     # Persist drawing record
@@ -127,24 +131,38 @@ async def upload_drawing(
         page_count=meta["page_count"],
     )
     db.add(drawing)
-    await db.flush()  # get drawing.id before commit
+    await db.flush()
 
-    # Process PDF
-    processor = PDFProcessor()
-    scale_info = processor.detect_scale(meta["file_path"])
-    layout = processor.extract_text_and_layout(meta["file_path"])
-    canvas_json = processor.pdf_to_canvas_json(meta["file_path"], page_number=1)
-    dims = processor.detect_dimensions(meta["file_path"])
-
-    # Update drawing with detected scale
-    if scale_info.scale_text:
-        drawing.scale = scale_info.scale_text
+    if is_dxf:
+        # Process DXF
+        from app.utils.dxf_parser import DXFEntityExtractor
+        extractor = DXFEntityExtractor(meta["file_path"])
+        entities = extractor.extract_all_entities()
+        canvas_json = extractor.to_canvas_json()
+        extracted_data = entities
+        suggestion_msg = f"DXF processed. {entities['summary']['total_lines']} lines, {entities['summary']['total_blocks']} blocks found."
+        response_extra = {
+            "summary": entities["summary"],
+            "layer_list": entities["layer_list"],
+        }
+    else:
+        # Process PDF
+        processor = PDFProcessor()
+        scale_info = processor.detect_scale(meta["file_path"])
+        layout = processor.extract_text_and_layout(meta["file_path"])
+        canvas_json = processor.pdf_to_canvas_json(meta["file_path"], page_number=1)
+        dims = processor.detect_dimensions(meta["file_path"])
+        if scale_info.scale_text:
+            drawing.scale = scale_info.scale_text
+        extracted_data = _layout_to_extracted_data(layout)
+        suggestion_msg = f"PDF processed."
+        response_extra = {
+            "scale": scale_info.scale_text,
+            "scale_confidence": scale_info.confidence,
+            "dimensions_detected": len(dims),
+        }
 
     # Generate quantity suggestions
-    # For PDF, we build a minimal "extracted_data" from layout (no DXF entities)
-    # The federation engine will find very little from a PDF — that's expected.
-    # The main take-off for PDFs is still manual (measurement tools in the UI).
-    extracted_data = _layout_to_extracted_data(layout)
     engine = FederationEngine(str(project_id))
     engine.add_from_drawing(str(drawing.id), disc_enum, extracted_data)
     suggestion_count = await _save_suggestions(db, project_id, drawing.id, engine)
@@ -152,24 +170,14 @@ async def upload_drawing(
     await db.commit()
     await db.refresh(drawing)
 
-    return {
+    res = {
         "drawing": DrawingOut.model_validate(drawing),
-        "scale": scale_info.scale_text,
-        "scale_confidence": scale_info.confidence,
-        "scale_method": scale_info.method,
-        "total_pages": layout["total_pages"],
-        "dimensions_detected": len(dims),
-        "dimensions": [
-            {"text": d.text, "value": d.value, "unit": d.unit, "page": d.page_number}
-            for d in dims[:50]
-        ],
         "canvas_json": canvas_json,
         "suggestions_generated": suggestion_count,
-        "message": (
-            f"PDF processed. {suggestion_count} quantity suggestions generated — "
-            "review them in the Suggested Quantities tab."
-        ),
+        "message": f"{suggestion_msg} {suggestion_count} quantity suggestions generated.",
     }
+    res.update(response_extra)
+    return res
 
 
 def _layout_to_extracted_data(layout: dict) -> dict:

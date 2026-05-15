@@ -56,7 +56,7 @@ export default function DrawingsPage() {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "application/pdf": [".pdf"] },
+    accept: { "application/pdf": [".pdf"], "image/vnd.dxf": [".dxf"] },
   });
 
   async function handleDelete(id: string) {
@@ -72,6 +72,8 @@ export default function DrawingsPage() {
         `/projects/${projectId}/drawings/${drawing.id}/file`,
         { responseType: "blob" }
       );
+      // For DXF, we might want to check the actual file type or rely on extension
+      const isDxf = drawing.filename.toLowerCase().endsWith(".dxf");
       const url = URL.createObjectURL(data);
       setViewer({ drawingId: drawing.id, blobUrl: url, drawingName: drawing.filename });
     } catch {
@@ -125,9 +127,9 @@ export default function DrawingsPage() {
               <input {...getInputProps()} />
               <Upload size={32} className="mx-auto text-outline mb-3" />
               <p className="text-on-surface font-medium">
-                {isDragActive ? "Drop files here" : "Drag & drop PDF files, or click to browse"}
+                {isDragActive ? "Drop files here" : "Drag & drop PDF/DXF files, or click to browse"}
               </p>
-              <p className="text-on-surface-variant text-sm mt-1">Max 100MB per file · PDF only</p>
+              <p className="text-on-surface-variant text-sm mt-1">Max 100MB per file · PDF, DXF supported</p>
             </div>
             {uploading && (
               <p className="text-sm text-accent animate-pulse flex items-center gap-2">

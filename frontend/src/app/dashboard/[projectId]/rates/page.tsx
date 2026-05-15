@@ -101,16 +101,41 @@ export default function RatesPage() {
   }
 
   async function exportExcel() {
-    // Build CSV for now (Excel import/export requires backend endpoint)
-    const rows = [["Code", "Description", "Unit", "Rate (ETB)", "Source", "Region"]];
-    rates.filter(r => r.project_id).forEach(r => {
-      rows.push([r.item_code ?? "", r.description, r.unit, String(r.rate_per_unit), r.rate_source ?? "", r.region ?? ""]);
-    });
-    const csv = rows.map(r => r.map(c => `"${c}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "project_rates.csv"; a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const res = await api.get(`/projects/${projectId}/rates/export-excel`, {
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Rates_Project.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to export rates");
+    }
+  }
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSaving(true);
+    const fd = new FormData();
+    fd.append("file", file);
+
+    try {
+      await api.post(`/projects/${projectId}/rates/import-excel`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      await load();
+      alert("Rates imported successfully");
+    } catch {
+      alert("Failed to import rates");
+    } finally {
+      setSaving(false);
+      e.target.value = "";
+    }
   }
 
   const projectRates = rates.filter(r => r.project_id !== null);
@@ -128,8 +153,12 @@ export default function RatesPage() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={exportExcel} className="btn-secondary flex items-center gap-2 text-sm">
-            <Download size={14} /> Export CSV
+            <Download size={14} /> Export Excel
           </button>
+          <label className="btn-secondary flex items-center gap-2 text-sm cursor-pointer">
+            <Upload size={14} /> Import Excel
+            <input type="file" className="hidden" accept=".xlsx,.xls" onChange={handleImport} />
+          </label>
           <button onClick={() => setShowAdd(v => !v)} className="btn-primary flex items-center gap-2 text-sm">
             <Plus size={14} /> Add Rate
           </button>
