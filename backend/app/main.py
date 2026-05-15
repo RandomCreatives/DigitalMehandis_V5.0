@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.api.v1 import auth, projects, drawings, takeoff, bbs, boq, rates
 from app.api.v1 import calibration, measurements, elements, boq_items, audit
+from app.api.v1 import cost_library, rate_matching
 
 settings = get_settings()
 
@@ -39,6 +40,10 @@ app.include_router(measurements.router, prefix=PREFIX)
 app.include_router(elements.router,     prefix=PREFIX)
 app.include_router(boq_items.router,    prefix=PREFIX)
 app.include_router(audit.router,        prefix=PREFIX)
+
+# ── Phase 2 Cost Engine routes ────────────────────────────────────────────────
+app.include_router(cost_library.router,  prefix=PREFIX)
+app.include_router(rate_matching.router, prefix=PREFIX)
 
 
 @app.get("/health")
