@@ -9,8 +9,8 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-ALLOWED_MIME_TYPES = {"application/pdf"}
-ALLOWED_EXTENSIONS = {".pdf"}
+ALLOWED_MIME_TYPES = {"application/pdf", "image/vnd.dxf", "application/dxf"}
+ALLOWED_EXTENSIONS = {".pdf", ".dxf"}
 
 
 async def save_upload(file: UploadFile, project_id: str) -> dict:
@@ -35,7 +35,10 @@ async def save_upload(file: UploadFile, project_id: str) -> dict:
     dest = upload_dir / f"{file_id}{ext}"
     dest.write_bytes(content)
 
-    page_count = _count_pdf_pages(content)
+    if ext == ".pdf":
+        page_count = _count_pdf_pages(content)
+    else:
+        page_count = 1
 
     return {
         "file_path": str(dest),

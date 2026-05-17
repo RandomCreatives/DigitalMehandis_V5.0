@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.session import get_db
 from app.db.models import Rate, Project, User
 from app.schemas.boq import RateOut
 from app.dependencies import get_current_user
+from app.utils.exporters import export_rates_excel
 from pydantic import BaseModel
 from uuid import UUID
 from typing import Any
+import openpyxl
+import io
 
 router = APIRouter(tags=["rates"])
 
@@ -153,3 +156,177 @@ async def delete_project_rate(
     await db.commit()
 
 
+@router.get("/projects/{project_id}/rates/export-excel")
+async def export_project_rates_to_excel(
+    project_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await _check_project(project_id, user, db)
+    result = await db.execute(
+        select(Rate).where(Rate.project_id == project_id).order_by(Rate.item_code)
+    )
+    rates = result.scalars().all()
+    rate_dicts = [
+        {
+            "item_code": r.item_code,
+            "description": r.description,
+            "unit": r.unit,
+            "rate_per_unit": float(r.rate_per_unit),
+            "rate_source": r.rate_source,
+            "region": r.region,
+        }
+        for r in rates
+    ]
+    xlsx_bytes = export_rates_excel(rate_dicts, project.name)
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="Rates_{project.name}.xlsx"'},
+    )
+
+
+@router.post("/projects/{project_id}/rates/import-excel", status_code=status.HTTP_201_CREATED)
+async def import_project_rates_from_excel(
+    project_id: UUID,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _check_project(project_id, user, db)
+
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(400, "Invalid file format. Please upload an Excel file.")
+
+    content = await file.read()
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+    ws = wb.active
+
+    imported_count = 0
+    # Expected headers: Item Code, Description, Unit, Rate (ETB), Source, Region
+    # Skip rows until we find headers or data. Let's assume headers are on row 4 as per export.
+    for row in ws.iter_rows(min_row=5, values_only=True):
+        if not row or not any(row):
+            continue
+
+        # Robust column unpacking
+        item_code = row[0] if len(row) > 0 else None
+        description = row[1] if len(row) > 1 else None
+        unit = row[2] if len(row) > 2 else "Nr"
+        rate_val = row[3] if len(row) > 3 else None
+        source = row[4] if len(row) > 4 else "Imported"
+        region = row[5] if len(row) > 5 else "Addis Ababa"
+
+        if not description or rate_val is None:
+            continue
+
+        try:
+            rate_numeric = float(rate_val)
+        except (ValueError, TypeError):
+            continue
+
+        rate = Rate(
+            project_id=project_id,
+            item_code=str(item_code) if item_code else None,
+            description=str(description),
+            unit=str(unit) if unit else "Nr",
+            rate_per_unit=rate_numeric,
+            rate_source=str(source) if source else "Imported",
+            region=str(region) if region else "Addis Ababa",
+        )
+        db.add(rate)
+        imported_count += 1
+
+    await db.commit()
+    return {"message": f"Successfully imported {imported_count} rates", "imported": imported_count}
+
+
+# ── BBS → BOQ feed (Federation Workflow) ──────────────────────────────────────
+
+@router.post("/projects/{project_id}/bbs/sync-to-boq", status_code=status.HTTP_201_CREATED)
+async def bbs_sync_to_boq(
+    project_id: UUID,
+    section: str = "SUBSTRUCTURE",
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Sync BBS steel totals to Federated Quantities.
+    Groups by diameter and creates PENDING suggested quantities.
+    Following Phase 2 federation workflow: Suggestions -> Review -> BOQ.
+    """
+    from app.db.models import BBSBar, SuggestedQuantity
+    from app.db.models_phase2 import AuditLog
+    from app.utils.bbs_calculator import BBSCalculator
+
+    await _check_project(project_id, user, db)
+
+    # Get all bars for this project/section
+    bars_result = await db.execute(
+        select(BBSBar).where(
+            BBSBar.project_id == project_id,
+            BBSBar.section == section.upper(),
+        )
+    )
+    bars = bars_result.scalars().all()
+    if not bars:
+        return {"message": "No BBS bars found for this section", "created": 0}
+
+    # Group by diameter
+    by_dia: dict[int, float] = {}
+    for bar in bars:
+        raw = {
+            "bar_shape": bar.bar_shape,
+            "clear_length_m": float(bar.clear_length_m),
+            "bar_diameter_mm": bar.bar_diameter_mm,
+            "hook_length_mm": bar.hook_length_mm or 0,
+            "cover_top_mm": bar.cover_top_mm or 50,
+            "cover_bottom_mm": bar.cover_bottom_mm or 50,
+            "quantity": bar.quantity,
+        }
+        enriched = BBSCalculator.enrich_bar(raw)
+        by_dia[bar.bar_diameter_mm] = by_dia.get(bar.bar_diameter_mm, 0.0) + enriched["total_weight_kg"]
+
+    # Delete existing PENDING suggestions from BBS to avoid duplicates
+    # Identification by notes: "Source: BBS sync"
+    # await db.execute(
+    #     delete(SuggestedQuantity).where(
+    #         SuggestedQuantity.project_id == project_id,
+    #         SuggestedQuantity.section == section.upper(),
+    #         SuggestedQuantity.notes.like("%Source: BBS sync%"),
+    #         SuggestedQuantity.status == "PENDING"
+    #     )
+    # )
+
+    created_count = 0
+    for dia, total_kg in sorted(by_dia.items()):
+        sq = SuggestedQuantity(
+            project_id=project_id,
+            discipline="STRUCTURAL",
+            element_category="REINFORCEMENT",
+            description=f"High yield deformed bar Ø{dia}mm (ASTM A615 / EBCS)",
+            quantity_value=round(total_kg, 2),
+            quantity_unit="kg",
+            section=section.upper(),
+            source_layer="BBS",
+            confidence=1.0,  # Computed from BBS = high confidence
+            notes=f"Source: BBS sync — {section}",
+            status="PENDING",
+        )
+        db.add(sq)
+        created_count += 1
+
+    db.add(AuditLog(
+        project_id=project_id,
+        user_id=user.id,
+        action="BBS_SYNCED_TO_SUGGESTIONS",
+        entity_type="SuggestedQuantity",
+        description=f"BBS steel totals synced to suggestions: {created_count} groups, {section}",
+    ))
+
+    await db.commit()
+    return {
+        "message": f"Synced {created_count} diameter groups to Suggested Quantities",
+        "count": created_count,
+        "section": section,
+    }

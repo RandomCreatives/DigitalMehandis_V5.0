@@ -68,6 +68,15 @@ export interface MeasurementCanvasProps {
   onClose: () => void;
 }
 
+// ── Project Element type ──────────────────────────────────────────────────────
+interface ProjectElement {
+  id: string;
+  element_code: string;
+  element_type: string;
+  discipline: string;
+  section: string;
+}
+
 // ── Pending measurement state ─────────────────────────────────────────────────
 interface PendingMeasurement {
   type: "length" | "area" | "count";
@@ -84,6 +93,7 @@ interface SaveForm {
   elementCategory: string;
   multiplier: number;
   color: string;
+  project_element_id: string;
 }
 
 const DEFAULT_FORM: SaveForm = {
@@ -93,6 +103,7 @@ const DEFAULT_FORM: SaveForm = {
   elementCategory: "",
   multiplier: 1.0,
   color: PRESET_COLORS[0],
+  project_element_id: "",
 };
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -183,6 +194,9 @@ export default function MeasurementCanvas({
   // Measurements
   const [measurements, setMeasurements] = useState<SavedMeasurement[]>([]);
 
+  // Project Elements
+  const [elements, setElements] = useState<ProjectElement[]>([]);
+
   // Pending measurement (finished drawing, awaiting save)
   const [pending, setPending] = useState<PendingMeasurement | null>(null);
   const pendingRef = useRef<PendingMeasurement | null>(null);
@@ -239,6 +253,16 @@ export default function MeasurementCanvas({
       // ignore
     }
   }, [projectId, drawingId, pageNumber]);
+
+  // ── Load project elements ───────────────────────────────────────────────────
+  const loadElements = useCallback(async () => {
+    try {
+      const { data } = await api.get(`/projects/${projectId}/elements`);
+      setElements(data ?? []);
+    } catch {
+      // ignore
+    }
+  }, [projectId]);
 
   // ── Render PDF ──────────────────────────────────────────────────────────────
   const renderPdf = useCallback(async () => {
@@ -389,6 +413,7 @@ export default function MeasurementCanvas({
 
       await loadCalibration();
       await loadMeasurements();
+      await loadElements();
     }
 
     init();
@@ -750,6 +775,7 @@ export default function MeasurementCanvas({
           points_json: { points: pending.points },
           multiplier: saveForm.multiplier,
           color: saveForm.color,
+          project_element_id: saveForm.project_element_id || null,
         }
       );
       setMeasurements((m) => [...m, data]);
@@ -965,6 +991,31 @@ export default function MeasurementCanvas({
                     onChange={(e) => setSaveForm((f) => ({ ...f, section: e.target.value as Section }))}
                   >
                     {SECTIONS.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-0.5">Link to Element</label>
+                  <select
+                    className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:border-[#eb6905]"
+                    value={saveForm.project_element_id}
+                    onChange={(e) => {
+                      const elId = e.target.value;
+                      const el = elements.find(x => x.id === elId);
+                      setSaveForm((f) => ({
+                        ...f,
+                        project_element_id: elId,
+                        elementCategory: el ? el.element_type : f.elementCategory,
+                        discipline: el ? el.discipline as Discipline : f.discipline,
+                        section: el ? el.section as Section : f.section,
+                      }));
+                    }}
+                  >
+                    <option value="">— Optional —</option>
+                    {elements.map((el) => (
+                      <option key={el.id} value={el.id}>
+                        {el.element_code} ({el.element_type})
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
