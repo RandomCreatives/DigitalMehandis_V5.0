@@ -1,7 +1,7 @@
 """One-time script to create all Phase 2 tables in SQLite."""
 import asyncio
 from app.db.base import Base
-from app.db import models, models_phase2  # noqa: F401 — register all models
+from app.db import models, models_phase2, models_cost  # noqa: F401 — register all models
 from app.db.session import engine
 
 

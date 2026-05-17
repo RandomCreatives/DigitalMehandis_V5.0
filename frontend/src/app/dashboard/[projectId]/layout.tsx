@@ -9,6 +9,7 @@ import {
   DollarSign, Database,
   Sparkles, ScrollText,
   ChevronLeft, ChevronRight, ChevronDown,
+  Settings2, Zap, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,18 +28,21 @@ const GROUPS = [
     label: "Quantities",
     icon: Table2,
     items: [
-      { label: "Take-off",     slug: "takeoff",   icon: Table2 },
-      { label: "BOQ",          slug: "boq",       icon: Layers },
-      { label: "BOQ Items",    slug: "boq-items", icon: ClipboardList },
-      { label: "Bar Schedule", slug: "bbs",       icon: BarChart3 },
+      { label: "Take-off",     slug: "takeoff",       icon: Table2 },
+      { label: "BOQ",          slug: "boq",           icon: Layers },
+      { label: "BOQ Items",    slug: "boq-items",     icon: ClipboardList },
+      { label: "Bar Schedule", slug: "bbs",           icon: BarChart3 },
+      { label: "Pricing",      slug: "pricing",       icon: Settings2 },
+      { label: "Rate Match",   slug: "rate-matching", icon: Zap },
     ],
   },
   {
     label: "Rates",
     icon: DollarSign,
     items: [
-      { label: "Rate Library", slug: "rates",     icon: DollarSign },
-      { label: "Cost Data",    slug: "cost-data", icon: Database },
+      { label: "Rate Library",  slug: "rates",        icon: DollarSign },
+      { label: "Cost Data",     slug: "cost-data",    icon: Database },
+      { label: "Gov. Rates",    slug: "rate-library", icon: BookOpen },
     ],
   },
 ];
