@@ -76,11 +76,11 @@ export default function BBSPage() {
     setPushResult(null);
     try {
       const { data } = await api.post(
-        `/projects/${projectId}/bbs/push-to-boq?section=${activeSection}`
+        `/projects/${projectId}/bbs/sync-to-boq?section=${activeSection}`
       );
       setPushResult(`✓ ${data.message}`);
     } catch {
-      setPushResult("Failed to push to BOQ");
+      setPushResult("Failed to sync to suggestions");
     } finally {
       setPushingToBoq(false);
     }
@@ -203,7 +203,7 @@ export default function BBSPage() {
                     disabled={pushingToBoq || filtered.length === 0}
                     className="btn-secondary flex items-center gap-2 disabled:opacity-40"
                   >
-                    <Layers size={14} /> {pushingToBoq ? "Pushing…" : "Push to BOQ"}
+                    <Layers size={14} /> {pushingToBoq ? "Syncing…" : "Sync to Suggestions"}
                   </button>
                   <button type="submit" className="btn-primary flex items-center gap-2">
                     <Plus size={15} /> Add Bar
