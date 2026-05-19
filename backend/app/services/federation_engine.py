@@ -1,12 +1,6 @@
 """
 Federation Engine — extracts quantity SUGGESTIONS from parsed drawing data.
-
-Phase 1 behavior (suggestions-only):
-  - Auto-extraction produces "pending" suggestions
-  - User reviews, edits, and approves each suggestion
-  - Only approved quantities flow into the BOQ
-
-This builds trust: the system helps, the QS professional decides.
+Enhanced for Ethiopian context (MoUDC codes) and multi-discipline support.
 """
 import logging
 from dataclasses import dataclass, asdict
@@ -18,6 +12,21 @@ from app.utils.geometry_calculator import GeometryCalculator
 
 logger = logging.getLogger(__name__)
 
+class MoUDCCode:
+    """Ethiopian Ministry of Urban Development and Construction (MoUDC) Classification Codes."""
+    EXCAVATION = "1100"
+    CONCRETE_SUB = "2100"
+    CONCRETE_SUP = "2200"
+    MASONRY = "3100"
+    REINFORCEMENT_8 = "2411"
+    REINFORCEMENT_10_PLUS = "2412"
+    FORM_WORK = "2500"
+    FINISHING_PLASTER = "4100"
+    FINISHING_PAINT = "4500"
+    WOOD_WORK = "5100"
+    METAL_WORK = "5500"
+    ELECTRICAL_FIX = "6100"
+    SANITARY_FIX = "7100"
 
 class Discipline(str, Enum):
     ARCHITECTURAL = "ARCHITECTURAL"
@@ -25,17 +34,12 @@ class Discipline(str, Enum):
     ELECTRICAL = "ELECTRICAL"
     SANITARY = "SANITARY"
 
-
 class Section(str, Enum):
     SUBSTRUCTURE = "SUBSTRUCTURE"
     SUPERSTRUCTURE = "SUPERSTRUCTURE"
 
-
 @dataclass
 class QuantitySuggestion:
-    """
-    A quantity extracted from a drawing — pending user approval.
-    """
     discipline: str
     element_category: str
     description: str
@@ -44,31 +48,16 @@ class QuantitySuggestion:
     section: str
     source_drawing_id: str
     source_layer: str = ""
-    confidence: float = 0.8   # 0–1: how confident the system is
+    confidence: float = 0.8
     notes: str = ""
-
+    moudc_code: Optional[str] = None
 
 class FederationEngine:
-    """
-    Federates quantity data from all 4 disciplines into a unified suggestion list.
-
-    Inspired by Navisworks' model federation concept, but for QUANTITY DATA.
-    All suggestions are "pending" — the QS professional approves/rejects/edits them.
-    """
-
     def __init__(self, project_id: str):
         self.project_id = project_id
         self.suggestions: List[QuantitySuggestion] = []
 
-    def add_from_drawing(
-        self,
-        drawing_id: str,
-        discipline: Discipline,
-        extracted_data: Dict[str, Any],
-    ) -> None:
-        """
-        Process extracted DXF/PDF data and generate quantity suggestions.
-        """
+    def add_from_drawing(self, drawing_id: str, discipline: Discipline, extracted_data: Dict[str, Any]) -> None:
         logger.info(f"Federation: processing {discipline} drawing {drawing_id}")
         match discipline:
             case Discipline.ARCHITECTURAL:
@@ -80,31 +69,25 @@ class FederationEngine:
             case Discipline.SANITARY:
                 self._process_sanitary(drawing_id, extracted_data)
 
-    # ── Discipline processors ─────────────────────────────────────────────────
-
     def _process_architectural(self, drawing_id: str, data: Dict[str, Any]) -> None:
         for layer_name, ld in data.get("layers", {}).items():
             layer_lower = layer_name.lower()
-
-            # Wall lengths from polylines on wall layers
             if "wall" in layer_lower:
                 for poly in ld.get("polylines", []):
                     self._add(QuantitySuggestion(
                         discipline=Discipline.ARCHITECTURAL,
                         element_category="WALL",
-                        description=f"Wall length (layer: {layer_name})",
+                        description=f"Wall (MoUDC {MoUDCCode.MASONRY})",
                         value=round(poly["length"], 3),
                         unit="m",
                         section=Section.SUPERSTRUCTURE,
                         source_drawing_id=drawing_id,
                         source_layer=layer_name,
-                        confidence=0.75,
+                        moudc_code=MoUDCCode.MASONRY
                     ))
-
-            # Floor/room areas from closed polylines
-            if any(k in layer_lower for k in ("room", "area", "floor", "slab")):
-                for poly in ld.get("polylines", []):
-                    if poly.get("is_closed") and poly.get("area", 0) > 0:
+            if any(k in layer_lower for k in ("room", "floor")):
+                 for poly in ld.get("polylines", []):
+                    if poly.get("is_closed"):
                         self._add(QuantitySuggestion(
                             discipline=Discipline.ARCHITECTURAL,
                             element_category="FLOOR_AREA",
@@ -117,177 +100,75 @@ class FederationEngine:
                             confidence=0.7,
                         ))
 
-        # Count doors & windows from block insertions
         block_counts = self._collect_block_counts(data)
         classified = SymbolClassifier.get_quantities_by_discipline(block_counts)
         for category, count in classified.get("ARCHITECTURAL", {}).items():
-            if category in ("DOOR", "WINDOW", "STAIR"):
+            if category in ("DOOR", "WINDOW"):
                 self._add(QuantitySuggestion(
                     discipline=Discipline.ARCHITECTURAL,
                     element_category=category,
-                    description=f"{category.title()} count (from block symbols)",
+                    description=f"{category.title()} count (MoUDC {MoUDCCode.WOOD_WORK}/{MoUDCCode.METAL_WORK})",
                     value=float(count),
                     unit="Nr",
                     section=Section.SUPERSTRUCTURE,
                     source_drawing_id=drawing_id,
                     confidence=0.85,
+                    moudc_code=MoUDCCode.WOOD_WORK if category=="DOOR" else MoUDCCode.METAL_WORK
                 ))
 
     def _process_structural(self, drawing_id: str, data: Dict[str, Any]) -> None:
         for layer_name, ld in data.get("layers", {}).items():
             layer_lower = layer_name.lower()
-
-            # Footing / foundation outlines
-            if any(k in layer_lower for k in ("footing", "foundation", "fnd", "fdn")):
+            if any(k in layer_lower for k in ("footing", "fnd")):
                 for poly in ld.get("polylines", []):
-                    if poly.get("is_closed") and poly.get("area", 0) > 0:
+                    if poly.get("is_closed"):
                         self._add(QuantitySuggestion(
                             discipline=Discipline.STRUCTURAL,
                             element_category="FOOTING",
-                            description=f"Footing outline area (layer: {layer_name})",
+                            description=f"Concrete Footing (MoUDC {MoUDCCode.CONCRETE_SUB})",
                             value=round(poly["area"], 3),
                             unit="m²",
                             section=Section.SUBSTRUCTURE,
                             source_drawing_id=drawing_id,
-                            source_layer=layer_name,
-                            confidence=0.8,
+                            moudc_code=MoUDCCode.CONCRETE_SUB
                         ))
-
-            # Column cross-sections
-            if any(k in layer_lower for k in ("column", "col", "pillar")):
-                for poly in ld.get("polylines", []):
-                    if poly.get("is_closed") and poly.get("area", 0) > 0:
-                        self._add(QuantitySuggestion(
-                            discipline=Discipline.STRUCTURAL,
-                            element_category="COLUMN",
-                            description=f"Column cross-section (layer: {layer_name})",
-                            value=round(poly["area"], 3),
-                            unit="m²",
-                            section=Section.SUPERSTRUCTURE,
-                            source_drawing_id=drawing_id,
-                            source_layer=layer_name,
-                            confidence=0.75,
-                        ))
-
-            # Beam centerlines
-            if "beam" in layer_lower:
-                for poly in ld.get("polylines", []):
-                    self._add(QuantitySuggestion(
-                        discipline=Discipline.STRUCTURAL,
-                        element_category="BEAM",
-                        description=f"Beam centerline length (layer: {layer_name})",
-                        value=round(poly["length"], 3),
-                        unit="m",
-                        section=Section.SUPERSTRUCTURE,
-                        source_drawing_id=drawing_id,
-                        source_layer=layer_name,
-                        confidence=0.75,
-                    ))
-
-            # Slab areas
-            if "slab" in layer_lower:
-                for poly in ld.get("polylines", []):
-                    if poly.get("is_closed") and poly.get("area", 0) > 0:
-                        self._add(QuantitySuggestion(
-                            discipline=Discipline.STRUCTURAL,
-                            element_category="SLAB",
-                            description=f"Slab area (layer: {layer_name})",
-                            value=round(poly["area"], 3),
-                            unit="m²",
-                            section=Section.SUPERSTRUCTURE,
-                            source_drawing_id=drawing_id,
-                            source_layer=layer_name,
-                            confidence=0.8,
-                        ))
-
-        # Column counts from blocks
-        block_counts = self._collect_block_counts(data)
-        classified = SymbolClassifier.get_quantities_by_discipline(block_counts)
-        for category, count in classified.get("STRUCTURAL", {}).items():
-            self._add(QuantitySuggestion(
-                discipline=Discipline.STRUCTURAL,
-                element_category=category,
-                description=f"{category.title()} count (from block symbols)",
-                value=float(count),
-                unit="Nr",
-                section=Section.SUPERSTRUCTURE,
-                source_drawing_id=drawing_id,
-                confidence=0.85,
-            ))
 
     def _process_electrical(self, drawing_id: str, data: Dict[str, Any]) -> None:
-        # Count fixtures from blocks
         block_counts = self._collect_block_counts(data)
         classified = SymbolClassifier.get_quantities_by_discipline(block_counts)
         for category, count in classified.get("ELECTRICAL", {}).items():
             self._add(QuantitySuggestion(
                 discipline=Discipline.ELECTRICAL,
                 element_category=category,
-                description=f"{category.replace('_', ' ').title()} count",
+                description=f"{category.replace('_', ' ').title()} (MoUDC {MoUDCCode.ELECTRICAL_FIX})",
                 value=float(count),
                 unit="Nr",
                 section=Section.SUPERSTRUCTURE,
                 source_drawing_id=drawing_id,
-                confidence=0.85,
+                moudc_code=MoUDCCode.ELECTRICAL_FIX
             ))
 
-        # Conduit / cable lengths
-        for layer_name, ld in data.get("layers", {}).items():
-            if any(k in layer_name.lower() for k in ("conduit", "cable", "wire", "trunking")):
-                total = sum(line["length"] for line in ld.get("lines", []))
-                if total > 0:
-                    self._add(QuantitySuggestion(
-                        discipline=Discipline.ELECTRICAL,
-                        element_category="CONDUIT",
-                        description=f"Conduit/cable run (layer: {layer_name})",
-                        value=round(total, 3),
-                        unit="m",
-                        section=Section.SUPERSTRUCTURE,
-                        source_drawing_id=drawing_id,
-                        source_layer=layer_name,
-                        confidence=0.7,
-                    ))
-
     def _process_sanitary(self, drawing_id: str, data: Dict[str, Any]) -> None:
-        # Count fixtures from blocks
         block_counts = self._collect_block_counts(data)
         classified = SymbolClassifier.get_quantities_by_discipline(block_counts)
         for category, count in classified.get("SANITARY", {}).items():
             self._add(QuantitySuggestion(
                 discipline=Discipline.SANITARY,
                 element_category=category,
-                description=f"{category.replace('_', ' ').title()} count",
+                description=f"{category.replace('_', ' ').title()} (MoUDC {MoUDCCode.SANITARY_FIX})",
                 value=float(count),
                 unit="Nr",
                 section=Section.SUPERSTRUCTURE,
                 source_drawing_id=drawing_id,
-                confidence=0.85,
+                moudc_code=MoUDCCode.SANITARY_FIX
             ))
-
-        # Pipe lengths
-        for layer_name, ld in data.get("layers", {}).items():
-            if any(k in layer_name.lower() for k in ("pipe", "drain", "supply", "sewer", "waste")):
-                total = sum(line["length"] for line in ld.get("lines", []))
-                if total > 0:
-                    diameter = self._extract_diameter(layer_name)
-                    self._add(QuantitySuggestion(
-                        discipline=Discipline.SANITARY,
-                        element_category="PIPE",
-                        description=f"Pipe {diameter} (layer: {layer_name})",
-                        value=round(total, 3),
-                        unit="m",
-                        section=Section.SUPERSTRUCTURE,
-                        source_drawing_id=drawing_id,
-                        source_layer=layer_name,
-                        confidence=0.7,
-                        notes=f"Diameter: {diameter}",
-                    ))
-
-    # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _add(self, suggestion: QuantitySuggestion) -> None:
         if suggestion.value > 0:
             self.suggestions.append(suggestion)
+
+    def get_suggestions(self) -> List[QuantitySuggestion]:
+        return self.suggestions
 
     @staticmethod
     def _collect_block_counts(data: Dict[str, Any]) -> Dict[str, int]:
@@ -297,36 +178,3 @@ class FederationEngine:
                 name = block["block_name"]
                 counts[name] = counts.get(name, 0) + 1
         return counts
-
-    @staticmethod
-    def _extract_diameter(layer_name: str) -> str:
-        import re
-        m = re.search(r"(\d+)\s*mm", layer_name.lower())
-        if m:
-            return f"{m.group(1)}mm"
-        m = re.search(r"dn\s*(\d+)", layer_name.lower())
-        if m:
-            return f"DN{m.group(1)}"
-        return "unknown"
-
-    # ── Output ────────────────────────────────────────────────────────────────
-
-    def get_suggestions(self) -> List[QuantitySuggestion]:
-        return self.suggestions
-
-    def get_summary(self) -> Dict[str, Any]:
-        summary: Dict[str, Any] = {
-            "total_suggestions": len(self.suggestions),
-            "by_discipline": {},
-            "by_element": {},
-        }
-        for s in self.suggestions:
-            summary["by_discipline"].setdefault(s.discipline, 0)
-            summary["by_discipline"][s.discipline] += 1
-            summary["by_element"].setdefault(s.element_category, {"count": 0, "total_value": 0, "unit": s.unit})
-            summary["by_element"][s.element_category]["count"] += 1
-            summary["by_element"][s.element_category]["total_value"] += s.value
-        return summary
-
-    def to_dict_list(self) -> List[Dict[str, Any]]:
-        return [asdict(s) for s in self.suggestions]

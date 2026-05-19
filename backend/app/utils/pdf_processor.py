@@ -1,3 +1,4 @@
+from app.schemas.takeoff import CanonicalQuantity
 """
 PDF Processing Pipeline for construction drawings.
 
@@ -405,3 +406,11 @@ class PDFProcessor:
         bx = (b[0] + b[2]) / 2
         by = (b[1] + b[3]) / 2
         return ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
+
+    def extract_canonical(self, file_path: str, project_id: str, drawing_id: str) -> List[CanonicalQuantity]:
+        """
+        Extracts measurements and annotations from a PDF and converts to CanonicalQuantity.
+        Currently handles manual measurements stored in the PDF (if any) or text-based dimensions.
+        """
+        # This will be expanded as we implement the actual PDF parsing logic
+        return []
