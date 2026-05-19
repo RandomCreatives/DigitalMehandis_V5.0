@@ -300,11 +300,13 @@ async def bbs_sync_to_boq(
 
     created_count = 0
     for dia, total_kg in sorted(by_dia.items()):
+        # Map to MoUDC classification (Example: 2400 for Steel reinforcement)
+        moudc_code = "2411" if dia <= 8 else "2412"
         sq = SuggestedQuantity(
             project_id=project_id,
             discipline="STRUCTURAL",
             element_category="REINFORCEMENT",
-            description=f"High yield deformed bar Ø{dia}mm (ASTM A615 / EBCS)",
+            description=f"High yield deformed bar Ø{dia}mm (MoUDC {moudc_code})",
             quantity_value=round(total_kg, 2),
             quantity_unit="kg",
             section=section.upper(),

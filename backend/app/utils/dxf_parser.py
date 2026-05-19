@@ -1,3 +1,4 @@
+from app.schemas.takeoff import CanonicalQuantity
 """
 DXF Entity Extractor — inspired by FreeCAD's importDXF.py.
 Uses ezdxf (the same library FreeCAD uses internally).
@@ -371,6 +372,44 @@ class DXFEntityExtractor:
                 "max_x": max(all_x), "max_y": max(all_y),
             }
         return data
+
+
+    def extract_canonical(self) -> List[CanonicalQuantity]:
+        """Extracts entities and returns them in a unified format."""
+        quantities = []
+        units = self._get_units()
+
+        for entity in self.msp:
+            etype = entity.dxftype()
+            layer = entity.dxf.layer
+            handle = entity.dxf.handle
+
+            if etype == "LINE":
+                start = (entity.dxf.start.x, entity.dxf.start.y)
+                end = (entity.dxf.end.x, entity.dxf.end.y)
+                val = GeometryCalculator.point_distance(start, end)
+                quantities.append(CanonicalQuantity(
+                    source_format="DXF",
+                    source_id=handle,
+                    label=f"Line on {layer}",
+                    quantity_type="length",
+                    value=val,
+                    unit=units,
+                    metadata={"layer": layer, "color": getattr(entity.dxf, "color", None)}
+                ))
+            elif etype in ("LWPOLYLINE", "POLYLINE"):
+                points = [(p[0], p[1]) for p in entity.get_points(format="xy")]
+                val = GeometryCalculator.polyline_length(points)
+                quantities.append(CanonicalQuantity(
+                    source_format="DXF",
+                    source_id=handle,
+                    label=f"Polyline on {layer}",
+                    quantity_type="length",
+                    value=val,
+                    unit=units,
+                    metadata={"layer": layer, "closed": bool(entity.closed)}
+                ))
+        return quantities
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
