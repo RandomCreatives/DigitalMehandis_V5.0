@@ -1,36 +1,9 @@
 import pytest
-import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from app.main import app
-from app.db.base import Base
-from app.db.session import get_db
-from app.db.models import Project, BBSBar
+from app.db.models import Project
 from uuid import uuid4
+from sqlalchemy import select
 
-TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
-
-@pytest_asyncio.fixture
-async def db_session():
-    engine = create_async_engine(TEST_DB_URL)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    session_factory = async_sessionmaker(engine, expire_on_commit=False)
-    async with session_factory() as session:
-        yield session
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-@pytest_asyncio.fixture
-async def client(db_session):
-    async def override_db():
-        yield db_session
-    app.dependency_overrides[get_db] = override_db
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        yield c
-    app.dependency_overrides.clear()
-
-@pytest_asyncio.fixture
+@pytest.fixture
 async def auth_header(client):
     # Register and login to get tokens
     await client.post("/api/v1/auth/register", json={
@@ -45,13 +18,9 @@ async def auth_header(client):
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
-@pytest_asyncio.fixture
+@pytest.fixture
 async def test_project(db_session, auth_header, client):
-    # Get user id from login or just use a known one if we had it.
-    # For simplicity, let's just create a project directly in DB if we can,
-    # but we need the user_id. Let's get it from the DB.
     from app.db.models import User
-    from sqlalchemy import select
     res = await db_session.execute(select(User).where(User.email == "bbs@example.com"))
     user = res.scalar_one()
 
@@ -113,7 +82,6 @@ async def test_bbs_sync_to_boq(client, auth_header, test_project, db_session):
 
     # 3. Verify SuggestedQuantity was created
     from app.db.models import SuggestedQuantity
-    from sqlalchemy import select
 
     res = await db_session.execute(
         select(SuggestedQuantity).where(SuggestedQuantity.project_id == test_project.id)
@@ -124,8 +92,6 @@ async def test_bbs_sync_to_boq(client, auth_header, test_project, db_session):
     assert suggestions[0].element_category == "REINFORCEMENT"
     assert "Ø12" in suggestions[0].description
     assert suggestions[0].section == "SUBSTRUCTURE"
-    # Ø12 weight is approx 0.888 kg/m. 15 bars * 2m = 30m. 30 * 0.888 = 26.64 kg
-    # Actually enriched includes covers etc, but for STRAIGHT clear_length_m is used directly in some logic or enriched.
     assert suggestions[0].quantity_value > 0
 
     # 4. Sync SUPERSTRUCTURE
