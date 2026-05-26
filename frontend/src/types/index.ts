@@ -151,3 +151,29 @@ export interface Rate {
   rate_source: string | null;
   region: string | null;
 }
+
+// ── Cost Library ─────────────────────────────────────────────────────────────
+export interface RateSourceOut {
+  id: string;
+  title: string;
+  issuing_authority: string | null;
+  region: string | null;
+  fiscal_year: string | null;
+  quarter: string | null;
+  item_count: number;
+  created_at: string;
+}
+
+export interface RateItemOut {
+  id: string;
+  rate_source_id: string;
+  parent_id: string | null;
+  item_no: string | null;
+  description: string;
+  unit: string;
+  direct_cost: number;
+  currency: string;
+  source_page: number | null;
+  confidence: number;
+  children?: RateItemOut[];
+}

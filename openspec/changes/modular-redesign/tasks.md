@@ -1,8 +1,8 @@
 ## Phase 1: Core Refactoring
 
-- [ ] 1.1 Implement `app.core.modules.loader` for dynamic router registration.
-- [ ] 1.2 Migrate existing features (BBS, BOQ, Projects) to the `app.modules/` structure.
-- [ ] 1.3 Update `main.py` to use the new loader.
+- [x] 1.1 Implement `app.core.modules.loader` for dynamic router registration.
+- [x] 1.2 Migrate existing features (BBS, BOQ, Projects) to the `app.modules/` structure.
+- [x] 1.3 Update `main.py` to use the new loader.
 
 ## Phase 2: AI & Semantic Search
 
@@ -13,8 +13,8 @@
 
 ## Phase 3: Advanced QTO & Data Pipeline
 
-- [ ] 3.1 Define the `CanonicalQuantity` Pydantic model for all takeoff sources.
-- [ ] 3.2 Refactor DXF parser to output CanonicalQuantities.
+- [x] 3.1 Define the `CanonicalQuantity` Pydantic model for all takeoff sources.
+- [x] 3.2 Refactor DXF parser to output CanonicalQuantities.
 - [ ] 3.3 Implement "Group by Layer/Type" in the takeoff explorer.
 
 ## Phase 4: Professional UI

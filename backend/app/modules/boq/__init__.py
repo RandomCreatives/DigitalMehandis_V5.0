@@ -9,7 +9,7 @@ from app.schemas.boq import BOQResult, BOQOutputOut, RateCreate, RateOut
 from app.dependencies import get_current_user
 from app.utils.boq_generator import BOQGenerator
 from app.utils.exporters import export_boq_excel, export_boq_pdf, export_bbs_excel
-from app.api.v1.bbs import _enrich
+from app.modules.bbs import _enrich
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["boq"])
 

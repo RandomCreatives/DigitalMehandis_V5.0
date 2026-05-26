@@ -1,241 +1,276 @@
 "use client";
-import { useState } from "react";
+
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Database, Search, Plus, ChevronDown, ChevronRight, BookOpen, RefreshCw, CheckCircle } from "lucide-react";
 import { api } from "@/lib/api";
-
-const CATEGORIES = [
-  {
-    code: "01", title: "Substructure Works", section: "SUBSTRUCTURE",
-    items: [
-      { code: "01.01", description: "Site clearance and removal of topsoil (200mm depth)", unit: "m²", rate: 45.00 },
-      { code: "01.02", description: "Bulk excavation in ordinary soil, depth ≤ 1.5m", unit: "m³", rate: 120.00 },
-      { code: "01.03", description: "Excavation in hard rock, depth ≤ 1.5m", unit: "m³", rate: 380.00 },
-      { code: "01.04", description: "Backfilling with selected material, compacted", unit: "m³", rate: 95.00 },
-    ],
-  },
-  {
-    code: "02", title: "Concrete Works", section: "SUBSTRUCTURE",
-    items: [
-      { code: "02.01", description: "Grade C-5 Lean Concrete bed, 50mm thickness", unit: "m²", rate: 850.00 },
-      { code: "02.02", description: "Grade C-25 Concrete in foundation footing incl. formwork", unit: "m³", rate: 14200.00 },
-      { code: "02.03", description: "Grade C-25 Concrete in columns incl. formwork", unit: "m³", rate: 15800.00 },
-      { code: "02.04", description: "Grade C-25 Concrete in beams incl. formwork", unit: "m³", rate: 15200.00 },
-      { code: "02.05", description: "Grade C-25 Concrete in suspended slabs incl. formwork", unit: "m³", rate: 14900.00 },
-    ],
-  },
-  {
-    code: "03", title: "Reinforcement Works", section: "SUBSTRUCTURE",
-    items: [
-      { code: "03.01", description: "High yield deformed bar Ø8mm (ASTM A615 / ES)", unit: "kg", rate: 85.00 },
-      { code: "03.02", description: "High yield deformed bar Ø10mm", unit: "kg", rate: 83.00 },
-      { code: "03.03", description: "High yield deformed bar Ø12mm", unit: "kg", rate: 82.00 },
-      { code: "03.04", description: "High yield deformed bar Ø16mm", unit: "kg", rate: 80.00 },
-      { code: "03.05", description: "High yield deformed bar Ø20mm", unit: "kg", rate: 79.00 },
-    ],
-  },
-  {
-    code: "04", title: "Masonry Works", section: "SUPERSTRUCTURE",
-    items: [
-      { code: "04.01", description: "200mm hollow concrete block wall incl. mortar", unit: "m²", rate: 1250.00 },
-      { code: "04.02", description: "150mm solid concrete block wall incl. mortar", unit: "m²", rate: 980.00 },
-      { code: "04.03", description: "Stone masonry in foundation, class A", unit: "m³", rate: 3200.00 },
-    ],
-  },
-  {
-    code: "05", title: "Finishing Works", section: "SUPERSTRUCTURE",
-    items: [
-      { code: "05.01", description: "Cement and sand plaster 20mm thick (1:3)", unit: "m²", rate: 320.00 },
-      { code: "05.02", description: "Ceramic floor tile 300×300mm incl. bedding", unit: "m²", rate: 850.00 },
-      { code: "05.03", description: "Emulsion paint two coats on plastered wall", unit: "m²", rate: 180.00 },
-    ],
-  },
-];
-
-interface UsedRate { code: string; description: string; }
+import {
+  Database, Search, ChevronDown, ChevronRight,
+  BookOpen, Plus, Info, CheckCircle, ExternalLink
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { RateItemOut, RateSourceOut } from "@/types";
 
 export default function CostDataPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const router = useRouter();
 
-  const [search, setSearch]       = useState("");
-  const [expanded, setExpanded]   = useState<Set<string>>(new Set(["01"]));
-  const [activeRegion, setRegion] = useState("Addis Ababa");
-  const [usedRates, setUsedRates] = useState<Set<string>>(new Set());
-  const [adding, setAdding]       = useState<string | null>(null);
+  const [sources, setSources] = useState<RateSourceOut[]>([]);
+  const [selectedSource, setSelectedSource] = useState<string | null>(null);
+  const [items, setItems] = useState<RateItemOut[]>([]);
+  const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<RateItemOut[]>([]);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState<string | null>(null);
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
 
-  const REGIONS = ["Addis Ababa", "Dire Dawa", "Mekelle", "Hawassa", "Bahir Dar", "Adama"];
+  // Load sources
+  useEffect(() => {
+    async function loadSources() {
+      try {
+        const res = await api.get("/cost-library/sources");
+        setSources(res.data);
+        if (res.data.length > 0) {
+          setSelectedSource(res.data[0].id);
+        }
+      } catch (err) {
+        console.error("Failed to load cost sources", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadSources();
+  }, []);
 
-  function toggleCategory(code: string) {
+  // Load tree when source changes
+  useEffect(() => {
+    if (!selectedSource || search) return;
+    async function loadTree() {
+      setLoading(true);
+      try {
+        const res = await api.get(`/cost-library/sources/${selectedSource}/tree`);
+        setItems(res.data);
+      } catch (err) {
+        console.error("Failed to load rate tree", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadTree();
+  }, [selectedSource, search]);
+
+  // Handle Search
+  useEffect(() => {
+    if (!search || search.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await api.get(`/cost-library/search?q=${search}${selectedSource ? \`&source_id=\${selectedSource}\` : ""}`);
+        setSearchResults(res.data);
+      } catch (err) {
+        console.error("Search failed", err);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, selectedSource]);
+
+  const toggleExpand = (id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
-      next.has(code) ? next.delete(code) : next.add(code);
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  }
+  };
 
-  async function useRate(item: { code: string; description: string; unit: string; rate: number }, section: string) {
-    setAdding(item.code);
+  async function addToProject(item: RateItemOut) {
+    setAdding(item.id);
     try {
-      // Create a BOQ item directly from this rate
-      await api.post(`/projects/${projectId}/boq-items`, {
-        item_no: item.code,
-        section: section,
-        trade: CATEGORIES.find(c => c.items.some(i => i.code === item.code))?.title ?? "",
-        description: item.description,
-        unit: item.unit,
-        quantity: 1.0,
-        rate: item.rate,
-        waste_factor: 0,
-        notes: `From Cost Data — MoUDC 2023 · ${activeRegion}`,
-        sort_order: 0,
+      await api.post("/cost-library/add-to-project", {
+        project_id: projectId,
+        rate_item_id: item.id,
+        section: item.item_no?.startsWith("2") ? "SUBSTRUCTURE" : "SUPERSTRUCTURE", // Heuristic
       });
-      setUsedRates((prev) => {
-        const next = new Set(prev);
-        next.add(item.code);
-        return next;
-      });
-    } catch {
-      // ignore — user can retry
+      setAddedIds(prev => new Set(prev).add(item.id));
+    } catch (err) {
+      console.error("Failed to add to project", err);
     } finally {
       setAdding(null);
     }
   }
 
-  const filtered = CATEGORIES.map((cat) => ({
-    ...cat,
-    items: cat.items.filter(
-      (item) =>
-        item.description.toLowerCase().includes(search.toLowerCase()) ||
-        item.code.includes(search)
-    ),
-  })).filter((cat) => search === "" || cat.items.length > 0);
+  const renderRow = (item: RateItemOut, depth = 0) => {
+    const isExpanded = expanded.has(item.id);
+    const hasChildren = item.children && item.children.length > 0;
+    const isActionable = item.direct_cost > 0;
 
-  return (
-    <div className="p-6 space-y-5 max-w-6xl mx-auto w-full">
-      {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Database size={20} className="text-accent" />
-            <h2 className="text-title-sm text-on-surface">Cost Data</h2>
-            <span className="chip chip-draft">MoUDC 2023</span>
-          </div>
-          <p className="text-sm text-on-surface-variant mt-1">
-            Government-released direct cost rates. Click <strong>Use Rate</strong> to add an item to your BOQ Items.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => router.push(`/dashboard/${projectId}/boq-items`)}
-            className="btn-secondary flex items-center gap-2 text-sm"
-          >
-            View BOQ Items →
-          </button>
-          <button className="btn-secondary flex items-center gap-2 opacity-50 cursor-not-allowed" disabled>
-            <RefreshCw size={14} /> Sync Latest Rates
-          </button>
-        </div>
-      </div>
-
-      {/* Notice */}
-      <div className="bg-secondary-container border border-secondary/20 rounded-xl px-4 py-3 flex items-start gap-3">
-        <BookOpen size={16} className="text-secondary mt-0.5 shrink-0" />
-        <div className="text-sm text-on-surface">
-          <span className="font-semibold">Placeholder data</span> — Indicative rates only.
-          &quot;Use Rate&quot; adds the item to your BOQ Items tab with quantity = 1 (edit there).
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-48 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" />
-          <input
-            className="input pl-9"
-            placeholder="Search by description or code…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-label-caps text-on-surface-variant">Region:</label>
-          <select className="input w-40" value={activeRegion} onChange={(e) => setRegion(e.target.value)}>
-            {REGIONS.map((r) => <option key={r}>{r}</option>)}
-          </select>
-        </div>
-      </div>
-
-      {/* Rate table */}
-      <div className="space-y-2">
-        {filtered.map((cat) => (
-          <div key={cat.code} className="panel overflow-hidden">
-            <button
-              onClick={() => toggleCategory(cat.code)}
-              className="w-full px-5 py-3 flex items-center gap-3 hover:bg-surface-low transition-colors text-left"
-            >
-              {expanded.has(cat.code)
-                ? <ChevronDown size={16} className="text-accent shrink-0" />
-                : <ChevronRight size={16} className="text-outline shrink-0" />}
-              <span className="font-mono text-xs text-on-surface-variant w-8">{cat.code}</span>
-              <span className="font-semibold text-on-surface">{cat.title}</span>
-              <span className="chip chip-draft text-xs ml-2">{cat.section}</span>
-              <span className="ml-auto text-xs text-on-surface-variant">{cat.items.length} items</span>
-            </button>
-
-            {expanded.has(cat.code) && (
-              <table className="data-table border-t border-outline-variant">
-                <thead>
-                  <tr>
-                    <th className="w-24">Code</th>
-                    <th>Description</th>
-                    <th className="w-20">Unit</th>
-                    <th className="num w-36">Rate (ETB)</th>
-                    <th className="w-28 text-center">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cat.items.map((item) => (
-                    <tr key={item.code}>
-                      <td className="font-mono text-xs text-on-surface-variant">{item.code}</td>
-                      <td className="text-on-surface">{item.description}</td>
-                      <td className="text-on-surface-variant">{item.unit}</td>
-                      <td className="num font-semibold text-on-surface">
-                        {item.rate.toLocaleString("en-ET", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="text-center">
-                        {usedRates.has(item.code) ? (
-                          <span className="flex items-center justify-center gap-1 text-xs text-green-600 font-semibold">
-                            <CheckCircle size={13} /> Added
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => useRate(item, cat.section)}
-                            disabled={adding === item.code}
-                            className="text-xs font-semibold text-accent hover:underline disabled:opacity-50"
-                          >
-                            {adding === item.code ? "Adding…" : "Use Rate"}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+    return (
+      <div key={item.id}>
+        <div
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 hover:bg-surface-low border-b border-outline-variant/50 transition-colors",
+            depth === 0 ? "bg-white font-semibold" : "bg-white/50"
+          )}
+          style={{ paddingLeft: \`\${depth * 1.5 + 1}rem\` }}
+        >
+          <div className="w-6 flex items-center justify-center">
+            {hasChildren && (
+              <button onClick={() => toggleExpand(item.id)} className="p-1 hover:bg-surface-container rounded">
+                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
             )}
           </div>
-        ))}
 
-        {filtered.length === 0 && (
-          <div className="card text-center py-12 text-on-surface-variant">
-            No rates found for &quot;{search}&quot;
+          <span className="font-mono text-[10px] text-outline w-16 shrink-0">{item.item_no}</span>
+
+          <div className="flex-1 flex flex-col min-w-0">
+            <span className="text-sm truncate" title={item.description}>{item.description}</span>
+            {item.source_page && (
+              <span className="text-[10px] text-outline flex items-center gap-1">
+                Source: Page {item.source_page} <ExternalLink size={8} />
+              </span>
+            )}
           </div>
-        )}
+
+          {isActionable ? (
+            <>
+              <span className="text-xs text-on-surface-variant w-12 text-center">{item.unit}</span>
+              <span className="text-sm font-mono font-semibold w-24 text-right">
+                {item.direct_cost.toLocaleString("en-ET", { minimumFractionDigits: 2 })}
+              </span>
+              <div className="w-24 flex justify-end">
+                {addedIds.has(item.id) ? (
+                  <span className="flex items-center gap-1 text-[10px] text-green-600 font-bold uppercase">
+                    <CheckCircle size={12} /> Template
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => addToProject(item)}
+                    disabled={adding === item.id}
+                    className="flex items-center gap-1 text-[10px] bg-accent/10 text-accent px-2 py-1 rounded hover:bg-accent hover:text-white transition-all font-bold uppercase"
+                  >
+                    <Plus size={10} /> {adding === item.id ? "..." : "Takeoff"}
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="w-60" /> // Spacer for non-actionable rows
+          )}
+        </div>
+        {isExpanded && item.children?.map(child => renderRow(child, depth + 1))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-surface">
+      {/* Sub Header */}
+      <div className="bg-white border-b border-outline-variant px-6 py-4 flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <Database size={18} className="text-accent" />
+            <h1 className="text-title-sm">Cost Data Library</h1>
+          </div>
+          <p className="text-xs text-on-surface-variant mt-0.5">Reference MoWUD rates &amp; generate takeoff templates</p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Dataset:</span>
+            <select
+              className="bg-surface-container border-none text-xs rounded-md px-2 py-1.5 focus:ring-1 focus:ring-accent outline-none"
+              value={selectedSource || ""}
+              onChange={(e) => setSelectedSource(e.target.value)}
+            >
+              {sources.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+            </select>
+          </div>
+          <button
+            onClick={() => router.push(\`/dashboard/\${projectId}/elements\`)}
+            className="btn-secondary py-1.5 px-3 flex items-center gap-2"
+          >
+            Manage Elements →
+          </button>
+        </div>
       </div>
 
-      <p className="text-xs text-on-surface-variant text-center pb-2">
-        Source: Ethiopian Ministry of Urban Development and Construction (MoUDC) · Schedule of Rates · {activeRegion} · 2023 Edition
-      </p>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* Search Bar */}
+        <div className="p-4 bg-white/50 border-b border-outline-variant/30">
+          <div className="relative max-w-2xl mx-auto">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" size={16} />
+            <input
+              className="input pl-10 h-10 text-sm bg-white"
+              placeholder="Search across 3,000+ items (e.g. 'Excavation', 'C-25', '2.7.1')..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Tree / Results */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto py-6 px-4">
+
+            <div className="bg-secondary-container/30 rounded-lg p-4 mb-6 flex gap-3 border border-secondary/10">
+              <Info size={18} className="text-secondary shrink-0" />
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                Items marked with <span className="font-bold text-accent">TAKEOFF</span> create a Project Element template.
+                Once created, you can link them to drawings in the <strong>Takeoff</strong> tab to calculate final quantities.
+              </p>
+            </div>
+
+            {loading && (
+              <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs text-outline font-medium">Indexing library...</span>
+              </div>
+            )}
+
+            {!loading && (
+              <div className="rounded-xl border border-outline-variant overflow-hidden shadow-sm">
+                <div className="bg-primary text-white flex items-center px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider">
+                  <div className="w-6" />
+                  <span className="w-16">Item No</span>
+                  <span className="flex-1">Description</span>
+                  <span className="w-12 text-center">Unit</span>
+                  <span className="w-24 text-right">Direct Cost (ETB)</span>
+                  <div className="w-24" />
+                </div>
+
+                {search ? (
+                  searchResults.length > 0 ? (
+                    searchResults.map(item => renderRow(item))
+                  ) : (
+                    <div className="p-12 text-center text-sm text-outline bg-white">No items matching &quot;{search}&quot;</div>
+                  )
+                ) : (
+                  items.length > 0 ? (
+                    items.map(item => renderRow(item))
+                  ) : (
+                    <div className="p-12 text-center text-sm text-outline bg-white">Select a dataset to begin.</div>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Verification Legend */}
+      <div className="px-6 py-2 bg-white border-t border-outline-variant flex items-center justify-between text-[10px] text-outline font-medium">
+        <div className="flex gap-4">
+          <span className="flex items-center gap-1"><div className="w-2 h-2 bg-accent rounded-full" /> Verified Source</span>
+          <span className="flex items-center gap-1"><BookOpen size={10} /> Official MoWUD Documentation</span>
+        </div>
+        <span>Last Updated: MoWUD 2018 3rd Qtr</span>
+      </div>
     </div>
   );
 }
