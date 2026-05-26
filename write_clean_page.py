@@ -1,6 +1,8 @@
-"use client";
+import os
 
-import React, { useEffect, useState } from "react";
+content = """\"use client\";
+
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import {
@@ -12,7 +14,7 @@ import type { RateItemOut, RateSourceOut } from "@/types";
 
 interface RateRowProps {
   item: RateItemOut;
-  depth: number;
+  depth?: number;
   expanded: Set<string>;
   onToggle: (id: string) => void;
   onAdd: (item: RateItemOut) => void;
@@ -20,17 +22,17 @@ interface RateRowProps {
   added: boolean;
 }
 
-const RateRow = (props: RateRowProps) => {
-  const item = props.item;
-  const depth = props.depth;
-  const expanded = props.expanded;
-  const onToggle = props.onToggle;
-  const onAdd = props.onAdd;
-  const adding = props.adding;
-  const added = props.added;
-
+const RateRow = ({
+  item,
+  depth = 0,
+  expanded,
+  onToggle,
+  onAdd,
+  adding,
+  added
+}: RateRowProps) => {
   const isExpanded = expanded.has(item.id);
-  const hasChildren = (item.children && item.children.length > 0);
+  const hasChildren = item.children && item.children.length > 0;
   const isActionable = item.direct_cost > 0;
 
   return (
@@ -43,22 +45,22 @@ const RateRow = (props: RateRowProps) => {
         style={{ paddingLeft: (depth * 1.5 + 1) + "rem" }}
       >
         <div className="w-6 flex items-center justify-center">
-          {hasChildren ? (
+          {hasChildren && (
             <button onClick={() => onToggle(item.id)} className="p-1 hover:bg-surface-container rounded">
               {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
-          ) : null}
+          )}
         </div>
 
         <span className="font-mono text-[10px] text-outline w-16 shrink-0">{item.item_no}</span>
 
         <div className="flex-1 flex flex-col min-w-0">
           <span className="text-sm truncate" title={item.description}>{item.description}</span>
-          {item.source_page ? (
+          {item.source_page && (
             <span className="text-[10px] text-outline flex items-center gap-1">
               Source: Page {item.source_page} <ExternalLink size={8} />
             </span>
-          ) : null}
+          )}
         </div>
 
         {isActionable ? (
@@ -87,7 +89,7 @@ const RateRow = (props: RateRowProps) => {
           <div className="w-60" />
         )}
       </div>
-      {isExpanded && item.children ? item.children.map((child: RateItemOut) => (
+      {isExpanded && item.children?.map(child => (
         <RateRow
           key={child.id}
           item={child}
@@ -98,14 +100,13 @@ const RateRow = (props: RateRowProps) => {
           adding={adding}
           added={added}
         />
-      )) : null}
+      ))}
     </div>
   );
 };
 
 export default function CostDataPage() {
-  const params = useParams();
-  const projectId = params.projectId as string;
+  const { projectId } = useParams<{ projectId: string }>();
   const router = useRouter();
 
   const [sources, setSources] = useState<RateSourceOut[]>([]);
@@ -119,18 +120,36 @@ export default function CostDataPage() {
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    api.get("/cost-library/sources").then(res => {
-      setSources(res.data);
-      if (res.data.length > 0) setSelectedSource(res.data[0].id);
-    }).finally(() => setLoading(false));
+    async function loadSources() {
+      try {
+        const res = await api.get("/cost-library/sources");
+        setSources(res.data);
+        if (res.data.length > 0) {
+          setSelectedSource(res.data[0].id);
+        }
+      } catch (err) {
+        console.error("Failed to load cost sources", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadSources();
   }, []);
 
   useEffect(() => {
     if (!selectedSource || search) return;
-    setLoading(true);
-    api.get("/cost-library/sources/" + selectedSource + "/tree")
-      .then(res => setItems(res.data))
-      .finally(() => setLoading(false));
+    async function loadTree() {
+      setLoading(true);
+      try {
+        const res = await api.get("/cost-library/sources/" + selectedSource + "/tree");
+        setItems(res.data);
+      } catch (err) {
+        console.error("Failed to load rate tree", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadTree();
   }, [selectedSource, search]);
 
   useEffect(() => {
@@ -138,35 +157,49 @@ export default function CostDataPage() {
       setSearchResults([]);
       return;
     }
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       setLoading(true);
-      const url = "/cost-library/search?q=" + search + (selectedSource ? "&source_id=" + selectedSource : "");
-      api.get(url)
-        .then(res => setSearchResults(res.data))
-        .finally(() => setLoading(false));
+      try {
+        const url = "/cost-library/search?q=" + search + (selectedSource ? "&source_id=" + selectedSource : "");
+        const res = await api.get(url);
+        setSearchResults(res.data);
+      } catch (err) {
+        console.error("Search failed", err);
+      } finally {
+        setLoading(false);
+      }
     }, 300);
     return () => clearTimeout(timer);
   }, [search, selectedSource]);
 
   const toggleExpand = (id: string) => {
-    setExpanded(prev => {
+    setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };
 
-  const addToProject = (item: RateItemOut) => {
+  async function addToProject(item: RateItemOut) {
     setAdding(item.id);
-    const isSub = item.item_no && item.item_no.startsWith("2");
-    api.post("/cost-library/add-to-project", {
-      project_id: projectId,
-      rate_item_id: item.id,
-      section: isSub ? "SUBSTRUCTURE" : "SUPERSTRUCTURE",
-    }).then(() => {
+    try {
+      const isSub = item.item_no && item.item_no.startsWith("2");
+      await api.post("/cost-library/add-to-project", {
+        project_id: projectId,
+        rate_item_id: item.id,
+        section: isSub ? "SUBSTRUCTURE" : "SUPERSTRUCTURE",
+      });
       setAddedIds(prev => new Set(prev).add(item.id));
-    }).finally(() => setAdding(null));
-  };
+    } catch (err) {
+      console.error("Failed to add to project", err);
+    } finally {
+      setAdding(null);
+    }
+  }
 
   return (
     <div className="flex flex-col h-full bg-surface">
@@ -246,7 +279,6 @@ export default function CostDataPage() {
                       <RateRow
                         key={item.id}
                         item={item}
-                        depth={0}
                         expanded={expanded}
                         onToggle={toggleExpand}
                         onAdd={addToProject}
@@ -263,7 +295,6 @@ export default function CostDataPage() {
                       <RateRow
                         key={item.id}
                         item={item}
-                        depth={0}
                         expanded={expanded}
                         onToggle={toggleExpand}
                         onAdd={addToProject}
@@ -291,3 +322,7 @@ export default function CostDataPage() {
     </div>
   );
 }
+"""
+
+with open("frontend/src/app/dashboard/[projectId]/cost-data/page.tsx", "w", encoding="utf-8") as f:
+    f.write(content)
