@@ -1,6 +1,8 @@
-"use client";
+import os
 
-import React, { useEffect, useState, useCallback } from "react";
+content = """\"use client\";
+
+import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import {
@@ -20,17 +22,12 @@ interface RateRowProps {
   addedIds: Set<string>;
 }
 
-/**
- * Recursive component to render hierarchical rate items.
- * Moved outside the main page component to ensure consistent SWC parsing.
- */
-function RateRow({ item, depth, expanded, onToggle, onAdd, adding, addedIds }: RateRowProps) {
+function RateRow(props: RateRowProps) {
+  const { item, depth, expanded, onToggle, onAdd, adding, addedIds } = props;
   const isExpanded = expanded.has(item.id);
   const hasChildren = Boolean(item.children && item.children.length > 0);
   const isActionable = item.direct_cost > 0;
   const isAdded = addedIds.has(item.id);
-
-  // Calculate indentation based on tree depth
   const paddingLeftValue = (depth * 20 + 16) + "px";
 
   return (
@@ -42,24 +39,20 @@ function RateRow({ item, depth, expanded, onToggle, onAdd, adding, addedIds }: R
         )}
         style={{ paddingLeft: paddingLeftValue }}
       >
-        {/* Toggle Button for Nested Items */}
         <div className="w-6 flex items-center justify-center">
           {hasChildren ? (
             <button
               type="button"
               onClick={() => onToggle(item.id)}
               className="p-1 hover:bg-surface-container rounded"
-              aria-label={isExpanded ? "Collapse" : "Expand"}
             >
               {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
           ) : null}
         </div>
 
-        {/* Item Number */}
         <span className="font-mono text-[10px] text-outline w-16 shrink-0">{item.item_no || ""}</span>
 
-        {/* Description & Source Info */}
         <div className="flex-1 flex flex-col min-w-0">
           <span className="text-sm truncate" title={item.description}>{item.description}</span>
           {item.source_page ? (
@@ -69,7 +62,6 @@ function RateRow({ item, depth, expanded, onToggle, onAdd, adding, addedIds }: R
           ) : null}
         </div>
 
-        {/* Actions (Unit, Rate, Add Button) */}
         {isActionable ? (
           <React.Fragment>
             <span className="text-xs text-on-surface-variant w-12 text-center">{item.unit}</span>
@@ -97,10 +89,8 @@ function RateRow({ item, depth, expanded, onToggle, onAdd, adding, addedIds }: R
           <div className="w-60" />
         )}
       </div>
-
-      {/* Recursive Children Rendering */}
-      {isExpanded && item.children && item.children.length > 0 && (
-        <div className="bg-surface-low/30">
+      {isExpanded && item.children && item.children.length > 0 ? (
+        <div>
           {item.children.map((child) => (
             <RateRow
               key={child.id}
@@ -114,7 +104,7 @@ function RateRow({ item, depth, expanded, onToggle, onAdd, adding, addedIds }: R
             />
           ))}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -124,7 +114,6 @@ export default function CostDataPage() {
   const projectId = (params?.projectId as string) || "";
   const router = useRouter();
 
-  // State Management
   const [sources, setSources] = useState<RateSourceOut[]>([]);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [items, setItems] = useState<RateItemOut[]>([]);
@@ -135,65 +124,59 @@ export default function CostDataPage() {
   const [adding, setAdding] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
 
-  // Initialization: Fetch available rate sources
   useEffect(() => {
-    let mounted = true;
+    let active = true;
     api.get("/cost-library/sources")
       .then((res) => {
-        if (mounted) {
+        if (active) {
           setSources(res.data);
           if (res.data.length > 0) setSelectedSource(res.data[0].id);
         }
       })
-      .catch(console.error)
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
+      .catch((err) => console.error(err))
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
-  // Tree Loading: Fetch hierarchical data for selected source
   useEffect(() => {
     if (!selectedSource || search) return;
-    let mounted = true;
+    let active = true;
     setLoading(true);
-    api.get(`/cost-library/sources/${selectedSource}/tree`)
-      .then((res) => { if (mounted) setItems(res.data); })
-      .catch(console.error)
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
+    api.get("/cost-library/sources/" + selectedSource + "/tree")
+      .then((res) => { if (active) setItems(res.data); })
+      .catch((err) => console.error(err))
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [selectedSource, search]);
 
-  // Search Logic: Debounced flat search across the library
   useEffect(() => {
     if (!search || search.length < 2) {
       setSearchResults([]);
       return;
     }
-    const timer = setTimeout(async () => {
+    const timer = setTimeout(() => {
       setLoading(true);
-      try {
-        const res = await api.get(`/cost-library/search?q=${encodeURIComponent(search)}${selectedSource ? `&source_id=${selectedSource}` : ""}`);
-        setSearchResults(res.data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
+      const url = "/cost-library/search?q=" + encodeURIComponent(search) + (selectedSource ? "&source_id=" + selectedSource : "");
+      api.get(url)
+        .then((res) => setSearchResults(res.data))
+        .catch((err) => console.error(err))
+        .finally(() => setLoading(false));
     }, 300);
     return () => clearTimeout(timer);
   }, [search, selectedSource]);
 
-  // UI Handlers
-  const toggleExpand = useCallback((id: string) => {
+  const toggleExpand = (id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  }, []);
+  };
 
-  const addToProject = useCallback((item: RateItemOut) => {
+  const addToProject = (item: RateItemOut) => {
     setAdding(item.id);
-    const isSub = Boolean(item.item_no && item.item_no.startsWith("2"));
+    const itemNo = item.item_no || "";
+    const isSub = itemNo.startsWith("2");
     api.post("/cost-library/add-to-project", {
       project_id: projectId,
       rate_item_id: item.id,
@@ -206,13 +189,12 @@ export default function CostDataPage() {
         return next;
       });
     })
-    .catch(console.error)
+    .catch((err) => console.error(err))
     .finally(() => setAdding(null));
-  }, [projectId]);
+  };
 
   return (
     <div className="flex flex-col h-full bg-surface">
-      {/* Header Bar */}
       <div className="bg-white border-b border-outline-variant px-6 py-4 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -226,7 +208,7 @@ export default function CostDataPage() {
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Dataset:</span>
             <select
-              className="bg-surface-container border-none text-xs rounded-md px-2 py-1.5 focus:ring-1 focus:ring-accent outline-none cursor-pointer"
+              className="bg-surface-container border-none text-xs rounded-md px-2 py-1.5 focus:ring-1 focus:ring-accent outline-none"
               value={selectedSource || ""}
               onChange={(e) => setSelectedSource(e.target.value)}
             >
@@ -235,7 +217,7 @@ export default function CostDataPage() {
           </div>
           <button
             type="button"
-            onClick={() => router.push(`/dashboard/${projectId}/elements`)}
+            onClick={() => router.push("/dashboard/" + projectId + "/elements")}
             className="btn-secondary py-1.5 px-3 flex items-center gap-2"
           >
             Manage Elements →
@@ -243,14 +225,12 @@ export default function CostDataPage() {
         </div>
       </div>
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-h-0">
-        {/* Search Bar Container */}
         <div className="p-4 bg-white/50 border-b border-outline-variant/30">
           <div className="relative max-w-2xl mx-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" size={16} />
             <input
-              className="input pl-10 h-10 text-sm bg-white shadow-sm"
+              className="input pl-10 h-10 text-sm bg-white"
               placeholder="Search across 3,000+ items (e.g. 'Excavation', 'C-25', '2.7.1')..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -258,11 +238,8 @@ export default function CostDataPage() {
           </div>
         </div>
 
-        {/* Tree and Results Scroll Area */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto py-6 px-4">
-
-            {/* Info Notice */}
             <div className="bg-secondary-container/30 rounded-lg p-4 mb-6 flex gap-3 border border-secondary/10">
               <Info size={18} className="text-secondary shrink-0" />
               <p className="text-xs text-on-surface-variant leading-relaxed">
@@ -271,7 +248,6 @@ export default function CostDataPage() {
               </p>
             </div>
 
-            {/* Loading Indicator */}
             {loading && (
               <div className="flex flex-col items-center justify-center py-20 gap-3">
                 <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
@@ -279,10 +255,8 @@ export default function CostDataPage() {
               </div>
             )}
 
-            {/* Content Table */}
             {!loading && (
               <div className="rounded-xl border border-outline-variant overflow-hidden shadow-sm">
-                {/* Table Header */}
                 <div className="bg-primary text-white flex items-center px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider">
                   <div className="w-6" />
                   <span className="w-16">Item No</span>
@@ -292,7 +266,6 @@ export default function CostDataPage() {
                   <div className="w-24" />
                 </div>
 
-                {/* Data Rows */}
                 {search ? (
                   searchResults.length > 0 ? (
                     searchResults.map((item) => (
@@ -334,7 +307,6 @@ export default function CostDataPage() {
         </div>
       </div>
 
-      {/* Verification Legend & Footer */}
       <div className="px-6 py-2 bg-white border-t border-outline-variant flex items-center justify-between text-[10px] text-outline font-medium">
         <div className="flex gap-4">
           <span className="flex items-center gap-1"><div className="w-2 h-2 bg-accent rounded-full" /> Verified Source</span>
@@ -345,3 +317,7 @@ export default function CostDataPage() {
     </div>
   );
 }
+"""
+
+with open("frontend/src/app/dashboard/[projectId]/cost-data/page.tsx", "w", encoding="utf-8") as f:
+    f.write(content)
