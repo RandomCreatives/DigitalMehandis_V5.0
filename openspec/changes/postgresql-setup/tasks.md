@@ -1,13 +1,13 @@
 ## 1. Infrastructure Setup
 
-- [ ] 1.1 Add PostgreSQL service to `docker-compose.yml`
-- [ ] 1.2 Update `.env.example` with PostgreSQL defaults
-- [ ] 1.3 Add `psycopg2-binary` or `asyncpg` to `backend/requirements.txt` (if missing)
+- [x] 1.1 Add PostgreSQL service to `docker-compose.yml`
+- [x] 1.2 Update `.env.example` with PostgreSQL defaults
+- [x] 1.3 Add `psycopg2-binary` or `asyncpg` to `backend/requirements.txt`
 
 ## 2. Backend Configuration
 
-- [ ] 2.1 Update `backend/app/core/config.py` to handle PostgreSQL connection string
-- [ ] 2.2 Refine `backend/app/db/session.py` for PostgreSQL/asyncpg specific requirements
+- [x] 2.1 Update `backend/app/core/config.py` to handle PostgreSQL connection string
+- [x] 2.2 Refine `backend/app/db/session.py` for PostgreSQL/asyncpg specific requirements
 
 ## 3. Migration and Verification
 
