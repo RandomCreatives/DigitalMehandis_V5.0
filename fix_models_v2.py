@@ -1,6 +1,9 @@
-"""
+import uuid
+from datetime import datetime, timezone
+
+template = """\"\"\"
 Phase 2 — Cost Engine: Government Direct Cost Library + Rate Matching + Pricing
-"""
+\"\"\"
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import String, Boolean, Integer, Text, ForeignKey, DateTime, Float
@@ -157,3 +160,6 @@ class ElementRateMatch(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
     rate_item: Mapped["RateItem | None"] = relationship("RateItem", back_populates="element_matches")
+\"\"\"
+with open("backend/app/db/models_cost.py", "w") as f:
+    f.write(template)
