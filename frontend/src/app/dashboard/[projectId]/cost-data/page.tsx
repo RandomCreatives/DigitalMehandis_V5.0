@@ -116,7 +116,7 @@ export default function CostDataPage() {
             "flex items-center gap-2 px-4 py-2 hover:bg-surface-low border-b border-outline-variant/50 transition-colors",
             depth === 0 ? "bg-white font-semibold" : "bg-white/50"
           )}
-          style={{ paddingLeft: \`\${depth * 1.5 + 1}rem\` }}
+          style={{ paddingLeft: `${depth * 1.5 + 1}rem` }}
         >
           <div className="w-6 flex items-center justify-center">
             {hasChildren && (
@@ -192,7 +192,7 @@ export default function CostDataPage() {
             </select>
           </div>
           <button
-            onClick={() => router.push(\`/dashboard/\${projectId}/elements\`)}
+            onClick={() => router.push(`/dashboard/${projectId}/elements`)}
             className="btn-secondary py-1.5 px-3 flex items-center gap-2"
           >
             Manage Elements →
