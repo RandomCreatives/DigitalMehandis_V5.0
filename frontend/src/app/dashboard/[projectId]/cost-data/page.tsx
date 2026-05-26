@@ -68,7 +68,8 @@ export default function CostDataPage() {
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/cost-library/search?q=${search}${selectedSource ? \`&source_id=\${selectedSource}\` : ""}`);
+        const sourceParam = selectedSource ? `&source_id=${selectedSource}` : "";
+        const res = await api.get(`/cost-library/search?q=${search}${sourceParam}`);
         setSearchResults(res.data);
       } catch (err) {
         console.error("Search failed", err);
