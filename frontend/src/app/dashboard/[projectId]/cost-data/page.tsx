@@ -1,277 +1,381 @@
 "use client";
-
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState, useMemo } from "react";
+import { useParams } from "next/navigation";
 import { api } from "@/lib/api";
 import {
-  Database, Search, ChevronDown, ChevronRight,
-  BookOpen, Plus, Info, CheckCircle, ExternalLink
+  ChevronDown, ChevronRight, Search,
+  Plus, Trash2, CheckCircle, Loader2, ShoppingCart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { RateItemOut, RateSourceOut } from "@/types";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface TaskItem {
+  id: string;          // composite: "file:index"
+  item_no: string | null;
+  description: string;
+  unit: string | null;
+  cost: number | null; // direct cost ETB
+  section: string;     // header label above this item
+  is_header: boolean;  // section header row (no cost)
+}
+
+interface TaskGroup {
+  name: string;        // e.g. "Concrete Work"
+  items: TaskItem[];
+}
+
+// ── Load JSON task files ──────────────────────────────────────────────────────
+// Files are served from /attachments/ (public folder) or fetched via API.
+// We embed the known file list; more can be added later.
+
+const TASK_FILES: { label: string; file: string }[] = [
+  { label: "Excavation & Earth Work",         file: "Task_Excavation_and_Earth_Work.json" },
+  { label: "Excavation & Earth Work (Manual)", file: "Task_Excavation_and_Earth_Work_Mechanized.json" },
+  { label: "Concrete Work",                   file: "Task_Concrete_Work.json" },
+  { label: "Masonry & Block Work",            file: "Task_Masonary_and_Block_Work.json" },
+  { label: "Demolishing",                     file: "Task_Demolishing.json" },
+];
+
+function parseCost(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  // Remove commas, spaces, OCR artifacts like 'l' instead of '1'
+  const cleaned = String(raw).replace(/,/g, "").replace(/\s/g, "").replace(/l/g, "1");
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? null : n;
+}
+
+async function loadTaskGroup(label: string, file: string): Promise<TaskGroup> {
+  try {
+    const res = await fetch(`/attachments/${file}`);
+    const raw: { ID: string | null; Description: string; Unit: string | null; Cost: string | null }[] = await res.json();
+    let currentSection = label;
+    const items: TaskItem[] = raw.map((row, idx) => {
+      const cost = parseCost(row.Cost);
+      const isHeader = !row.Unit && cost === null;
+      if (isHeader && row.Description) currentSection = row.Description;
+      return {
+        id: `${file}:${idx}`,
+        item_no: row.ID ?? null,
+        description: row.Description,
+        unit: row.Unit ?? null,
+        cost,
+        section: currentSection,
+        is_header: isHeader,
+      };
+    });
+    return { name: label, items };
+  } catch {
+    return { name: label, items: [] };
+  }
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function CostDataPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const router = useRouter();
 
-  const [sources, setSources] = useState<RateSourceOut[]>([]);
-  const [selectedSource, setSelectedSource] = useState<string | null>(null);
-  const [items, setItems] = useState<RateItemOut[]>([]);
-  const [search, setSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<RateItemOut[]>([]);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [groups, setGroups] = useState<TaskGroup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [adding, setAdding] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set()); // item ids
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
 
-  // Load sources
+  // Load all task files on mount
   useEffect(() => {
-    async function loadSources() {
-      try {
-        const res = await api.get("/cost-library/sources");
-        setSources(res.data);
-        if (res.data.length > 0) {
-          setSelectedSource(res.data[0].id);
-        }
-      } catch (err) {
-        console.error("Failed to load cost sources", err);
-      } finally {
-        setLoading(false);
-      }
+    async function load() {
+      setLoading(true);
+      const loaded = await Promise.all(
+        TASK_FILES.map((f) => loadTaskGroup(f.label, f.file))
+      );
+      setGroups(loaded);
+      // Expand first group by default
+      if (loaded.length > 0) setExpandedGroups(new Set([loaded[0].name]));
+      setLoading(false);
     }
-    loadSources();
+    load();
   }, []);
 
-  // Load tree when source changes
-  useEffect(() => {
-    if (!selectedSource || search) return;
-    async function loadTree() {
-      setLoading(true);
-      try {
-        const res = await api.get(`/cost-library/sources/${selectedSource}/tree`);
-        setItems(res.data);
-      } catch (err) {
-        console.error("Failed to load rate tree", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadTree();
-  }, [selectedSource, search]);
+  // Filtered items across all groups
+  const filteredGroups = useMemo(() => {
+    if (!search.trim()) return groups;
+    const q = search.toLowerCase();
+    return groups.map((g) => ({
+      ...g,
+      items: g.items.filter(
+        (i) =>
+          i.description.toLowerCase().includes(q) ||
+          (i.item_no ?? "").toLowerCase().includes(q)
+      ),
+    })).filter((g) => g.items.length > 0);
+  }, [groups, search]);
 
-  // Handle Search
-  useEffect(() => {
-    if (!search || search.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      try {
-        const sourceParam = selectedSource ? `&source_id=${selectedSource}` : "";
-        const res = await api.get(`/cost-library/search?q=${search}${sourceParam}`);
-        setSearchResults(res.data);
-      } catch (err) {
-        console.error("Search failed", err);
-      } finally {
-        setLoading(false);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [search, selectedSource]);
+  function toggleGroup(name: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  }
 
-  const toggleExpand = (id: string) => {
-    setExpanded((prev) => {
+  function toggleItem(id: string) {
+    setSelected((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
+  }
 
-  async function addToProject(item: RateItemOut) {
-    setAdding(item.id);
+  function toggleGroupItems(group: TaskGroup) {
+    const actionable = group.items.filter((i) => !i.is_header && i.cost !== null);
+    const allSelected = actionable.every((i) => selected.has(i.id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      actionable.forEach((i) => allSelected ? next.delete(i.id) : next.add(i.id));
+      return next;
+    });
+  }
+
+  // Collect selected item objects
+  const selectedItems = useMemo(() => {
+    const all = groups.flatMap((g) => g.items);
+    return all.filter((i) => selected.has(i.id));
+  }, [groups, selected]);
+
+  async function addSelectedToBOQ() {
+    if (selectedItems.length === 0) return;
+    setAdding(true);
     try {
-      await api.post("/cost-library/add-to-project", {
-        project_id: projectId,
-        rate_item_id: item.id,
-        section: item.item_no?.startsWith("2") ? "SUBSTRUCTURE" : "SUPERSTRUCTURE", // Heuristic
+      // Add each selected item as a BOQ item (quantity=0, waiting for takeoff)
+      await Promise.all(
+        selectedItems.map((item) =>
+          api.post(`/projects/${projectId}/boq-items`, {
+            item_no: item.item_no ?? "",
+            section: item.section.toUpperCase().includes("SUB") ? "SUBSTRUCTURE" : "SUPERSTRUCTURE",
+            description: item.description,
+            unit: item.unit ?? "m³",
+            quantity: 0,
+            rate: item.cost ?? 0,
+            amount: 0,
+          })
+        )
+      );
+      setAddedIds((prev) => {
+        const next = new Set(prev);
+        selectedItems.forEach((i) => next.add(i.id));
+        return next;
       });
-      setAddedIds(prev => new Set(prev).add(item.id));
+      setSelected(new Set());
     } catch (err) {
-      console.error("Failed to add to project", err);
+      console.error("Failed to add to BOQ", err);
     } finally {
-      setAdding(null);
+      setAdding(false);
     }
   }
 
-  const renderRow = (item: RateItemOut, depth = 0) => {
-    const isExpanded = expanded.has(item.id);
-    const hasChildren = item.children && item.children.length > 0;
-    const isActionable = item.direct_cost > 0;
-
-    return (
-      <div key={item.id}>
-        <div
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 hover:bg-surface-low border-b border-outline-variant/50 transition-colors",
-            depth === 0 ? "bg-white font-semibold" : "bg-white/50"
-          )}
-          style={{ paddingLeft: `${depth * 1.5 + 1}rem` }}
-        >
-          <div className="w-6 flex items-center justify-center">
-            {hasChildren && (
-              <button onClick={() => toggleExpand(item.id)} className="p-1 hover:bg-surface-container rounded">
-                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </button>
-            )}
-          </div>
-
-          <span className="font-mono text-[10px] text-outline w-16 shrink-0">{item.item_no}</span>
-
-          <div className="flex-1 flex flex-col min-w-0">
-            <span className="text-sm truncate" title={item.description}>{item.description}</span>
-            {item.source_page && (
-              <span className="text-[10px] text-outline flex items-center gap-1">
-                Source: Page {item.source_page} <ExternalLink size={8} />
-              </span>
-            )}
-          </div>
-
-          {isActionable ? (
-            <>
-              <span className="text-xs text-on-surface-variant w-12 text-center">{item.unit}</span>
-              <span className="text-sm font-mono font-semibold w-24 text-right">
-                {item.direct_cost.toLocaleString("en-ET", { minimumFractionDigits: 2 })}
-              </span>
-              <div className="w-24 flex justify-end">
-                {addedIds.has(item.id) ? (
-                  <span className="flex items-center gap-1 text-[10px] text-green-600 font-bold uppercase">
-                    <CheckCircle size={12} /> Template
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => addToProject(item)}
-                    disabled={adding === item.id}
-                    className="flex items-center gap-1 text-[10px] bg-accent/10 text-accent px-2 py-1 rounded hover:bg-accent hover:text-white transition-all font-bold uppercase"
-                  >
-                    <Plus size={10} /> {adding === item.id ? "..." : "Takeoff"}
-                  </button>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="w-60" /> // Spacer for non-actionable rows
-          )}
-        </div>
-        {isExpanded && item.children?.map(child => renderRow(child, depth + 1))}
-      </div>
-    );
-  };
+  const totalSelectedCost = selectedItems.reduce((s, i) => s + (i.cost ?? 0), 0);
 
   return (
-    <div className="flex flex-col h-full bg-surface">
-      {/* Sub Header */}
-      <div className="bg-white border-b border-outline-variant px-6 py-4 flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <Database size={18} className="text-accent" />
-            <h1 className="text-title-sm">Cost Data Library</h1>
-          </div>
-          <p className="text-xs text-on-surface-variant mt-0.5">Reference MoWUD rates &amp; generate takeoff templates</p>
-        </div>
+    <div className="flex flex-col h-full">
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Dataset:</span>
-            <select
-              className="bg-surface-container border-none text-xs rounded-md px-2 py-1.5 focus:ring-1 focus:ring-accent outline-none"
-              value={selectedSource || ""}
-              onChange={(e) => setSelectedSource(e.target.value)}
-            >
-              {sources.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
-            </select>
+      {/* ── Header ── */}
+      <div className="bg-white border-b border-outline-variant px-6 py-4 shrink-0">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-title-sm text-on-surface">Cost Data</h2>
+            <p className="text-xs text-on-surface-variant mt-0.5">
+              MoWUD 2018 Q3 · Select items to add to your BOQ
+            </p>
           </div>
-          <button
-            onClick={() => router.push(`/dashboard/${projectId}/elements`)}
-            className="btn-secondary py-1.5 px-3 flex items-center gap-2"
-          >
-            Manage Elements →
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-h-0">
-        {/* Search Bar */}
-        <div className="p-4 bg-white/50 border-b border-outline-variant/30">
-          <div className="relative max-w-2xl mx-auto">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" size={16} />
+          {/* Search */}
+          <div className="relative w-72">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-outline" />
             <input
-              className="input pl-10 h-10 text-sm bg-white"
-              placeholder="Search across 3,000+ items (e.g. 'Excavation', 'C-25', '2.7.1')..."
+              className="input pl-9 text-sm"
+              placeholder="Search items…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
         </div>
+      </div>
 
-        {/* Tree / Results */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto py-6 px-4">
+      {/* ── Task list ── */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center py-20 gap-2 text-on-surface-variant">
+            <Loader2 size={18} className="animate-spin" />
+            <span className="text-sm">Loading cost data…</span>
+          </div>
+        ) : filteredGroups.length === 0 ? (
+          <div className="card text-center py-12 text-on-surface-variant">
+            <p className="text-sm">No items match &quot;{search}&quot;</p>
+          </div>
+        ) : (
+          filteredGroups.map((group) => {
+            const isOpen = search.trim() ? true : expandedGroups.has(group.name);
+            const actionable = group.items.filter((i) => !i.is_header && i.cost !== null);
+            const groupSelectedCount = actionable.filter((i) => selected.has(i.id)).length;
+            const allGroupSelected = actionable.length > 0 && groupSelectedCount === actionable.length;
 
-            <div className="bg-secondary-container/30 rounded-lg p-4 mb-6 flex gap-3 border border-secondary/10">
-              <Info size={18} className="text-secondary shrink-0" />
-              <p className="text-xs text-on-surface-variant leading-relaxed">
-                Items marked with <span className="font-bold text-accent">TAKEOFF</span> create a Project Element template.
-                Once created, you can link them to drawings in the <strong>Takeoff</strong> tab to calculate final quantities.
-              </p>
-            </div>
+            return (
+              <div key={group.name} className="panel overflow-hidden">
+                {/* Group header */}
+                <button
+                  onClick={() => toggleGroup(group.name)}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-primary text-white hover:bg-primary/90 transition-colors"
+                >
+                  {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                  <span className="font-semibold text-sm flex-1 text-left">{group.name}</span>
+                  <span className="text-xs text-white/60">{actionable.length} items</span>
+                  {groupSelectedCount > 0 && (
+                    <span className="text-xs bg-accent text-white px-2 py-0.5 rounded-full font-bold">
+                      {groupSelectedCount} selected
+                    </span>
+                  )}
+                  {/* Select all in group */}
+                  {isOpen && actionable.length > 0 && (
+                    <span
+                      role="checkbox"
+                      aria-checked={allGroupSelected}
+                      onClick={(e) => { e.stopPropagation(); toggleGroupItems(group); }}
+                      className={cn(
+                        "w-4 h-4 rounded border-2 flex items-center justify-center transition-colors shrink-0",
+                        allGroupSelected
+                          ? "bg-accent border-accent"
+                          : "border-white/50 hover:border-white"
+                      )}
+                    >
+                      {allGroupSelected && <CheckCircle size={10} className="text-white" />}
+                    </span>
+                  )}
+                </button>
 
-            {loading && (
-              <div className="flex flex-col items-center justify-center py-20 gap-3">
-                <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs text-outline font-medium">Indexing library...</span>
-              </div>
-            )}
+                {/* Items */}
+                {isOpen && (
+                  <div>
+                    {/* Column headers */}
+                    <div className="flex items-center gap-2 px-4 py-1.5 bg-surface-low border-b border-outline-variant text-label-caps text-on-surface-variant">
+                      <div className="w-5" />
+                      <span className="w-16">Item No</span>
+                      <span className="flex-1">Description</span>
+                      <span className="w-14 text-center">Unit</span>
+                      <span className="w-28 text-right">Direct Cost (ETB)</span>
+                      <div className="w-5" />
+                    </div>
 
-            {!loading && (
-              <div className="rounded-xl border border-outline-variant overflow-hidden shadow-sm">
-                <div className="bg-primary text-white flex items-center px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider">
-                  <div className="w-6" />
-                  <span className="w-16">Item No</span>
-                  <span className="flex-1">Description</span>
-                  <span className="w-12 text-center">Unit</span>
-                  <span className="w-24 text-right">Direct Cost (ETB)</span>
-                  <div className="w-24" />
-                </div>
+                    {group.items.map((item) => {
+                      if (item.is_header) {
+                        return (
+                          <div key={item.id} className="px-4 py-1.5 bg-surface-highest border-b border-outline-variant">
+                            <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide">
+                              {item.description}
+                            </span>
+                          </div>
+                        );
+                      }
 
-                {search ? (
-                  searchResults.length > 0 ? (
-                    searchResults.map(item => renderRow(item))
-                  ) : (
-                    <div className="p-12 text-center text-sm text-outline bg-white">No items matching &quot;{search}&quot;</div>
-                  )
-                ) : (
-                  items.length > 0 ? (
-                    items.map(item => renderRow(item))
-                  ) : (
-                    <div className="p-12 text-center text-sm text-outline bg-white">Select a dataset to begin.</div>
-                  )
+                      const isSelected = selected.has(item.id);
+                      const isAdded = addedIds.has(item.id);
+                      const hasPrice = item.cost !== null;
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => hasPrice && toggleItem(item.id)}
+                          className={cn(
+                            "flex items-center gap-2 px-4 py-2 border-b border-outline-variant transition-colors",
+                            hasPrice ? "cursor-pointer hover:bg-surface-low" : "opacity-50 cursor-default",
+                            isSelected && "bg-orange-50"
+                          )}
+                        >
+                          {/* Checkbox */}
+                          <div className={cn(
+                            "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                            isSelected ? "bg-accent border-accent" : "border-outline-variant"
+                          )}>
+                            {isSelected && <CheckCircle size={10} className="text-white" />}
+                          </div>
+
+                          <span className="font-mono text-[10px] text-on-surface-variant w-16 shrink-0">
+                            {item.item_no ?? "—"}
+                          </span>
+
+                          <span className="flex-1 text-sm text-on-surface leading-snug">
+                            {item.description}
+                            {isAdded && (
+                              <span className="ml-2 text-[10px] text-green-600 font-bold uppercase">
+                                ✓ In BOQ
+                              </span>
+                            )}
+                          </span>
+
+                          <span className="w-14 text-center text-xs text-on-surface-variant shrink-0">
+                            {item.unit ?? "—"}
+                          </span>
+
+                          <span className="w-28 text-right text-sm font-mono font-semibold text-on-surface shrink-0">
+                            {item.cost !== null
+                              ? item.cost.toLocaleString("en-ET", { minimumFractionDigits: 2 })
+                              : "—"}
+                          </span>
+
+                          {/* Quick add single item */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!isAdded && hasPrice) {
+                                setSelected(new Set([item.id]));
+                              }
+                            }}
+                            className="w-5 flex items-center justify-center text-outline hover:text-accent transition-colors shrink-0"
+                            title="Select"
+                          >
+                            <Plus size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
+            );
+          })
+        )}
       </div>
 
-      {/* Verification Legend */}
-      <div className="px-6 py-2 bg-white border-t border-outline-variant flex items-center justify-between text-[10px] text-outline font-medium">
-        <div className="flex gap-4">
-          <span className="flex items-center gap-1"><div className="w-2 h-2 bg-accent rounded-full" /> Verified Source</span>
-          <span className="flex items-center gap-1"><BookOpen size={10} /> Official MoWUD Documentation</span>
+      {/* ── Selection action bar ── */}
+      {selected.size > 0 && (
+        <div className="shrink-0 bg-primary text-white px-6 py-3 flex items-center gap-4 border-t border-primary">
+          <ShoppingCart size={16} className="text-accent shrink-0" />
+          <div className="flex-1">
+            <span className="text-sm font-semibold">
+              {selected.size} item{selected.size !== 1 ? "s" : ""} selected
+            </span>
+            <span className="text-white/60 text-xs ml-3">
+              Total direct cost: ETB {totalSelectedCost.toLocaleString("en-ET", { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="btn-ghost text-white/60 hover:text-white text-xs py-1"
+          >
+            <Trash2 size={13} className="inline mr-1" /> Clear
+          </button>
+          <button
+            onClick={addSelectedToBOQ}
+            disabled={adding}
+            className="btn-primary flex items-center gap-2 py-1.5"
+          >
+            {adding
+              ? <Loader2 size={13} className="animate-spin" />
+              : <Plus size={13} />}
+            {adding ? "Adding…" : "Add to BOQ"}
+          </button>
         </div>
-        <span>Last Updated: MoWUD 2018 3rd Qtr</span>
-      </div>
+      )}
     </div>
   );
 }

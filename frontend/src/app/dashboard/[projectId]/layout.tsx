@@ -40,9 +40,8 @@ const GROUPS = [
     label: "Rates",
     icon: DollarSign,
     items: [
-      { label: "Rate Library",  slug: "rates",        icon: DollarSign },
-      { label: "Cost Data",     slug: "cost-data",    icon: Database },
-      { label: "Gov. Rates",    slug: "rate-library", icon: BookOpen },
+      { label: "Cost Data",  slug: "cost-data",    icon: Database },
+      { label: "Gov. Rates", slug: "rate-library",  icon: BookOpen },
     ],
   },
 ];
