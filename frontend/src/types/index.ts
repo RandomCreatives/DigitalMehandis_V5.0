@@ -1,4 +1,4 @@
-// ── Auth ──────────────────────────────────────────────────────────────────────
+// -- Auth --
 export interface User {
   id: string;
   email: string;
@@ -16,7 +16,7 @@ export interface TokenResponse {
   token_type: string;
 }
 
-// ── Projects ──────────────────────────────────────────────────────────────────
+// -- Projects --
 export interface Project {
   id: string;
   name: string;
@@ -30,18 +30,8 @@ export interface Project {
   updated_at: string;
 }
 
-export interface ProjectCreate {
-  name: string;
-  location: string;
-  description?: string;
-  code_of_practice?: string;
-  unit_system?: string;
-  currency?: string;
-}
-
-// ── Drawings ──────────────────────────────────────────────────────────────────
+// -- Drawings --
 export type DrawingCategory = "ARCHITECTURAL" | "STRUCTURAL" | "ELECTRICAL" | "SANITARY";
-
 export interface Drawing {
   id: string;
   project_id: string;
@@ -54,9 +44,8 @@ export interface Drawing {
   uploaded_at: string;
 }
 
-// ── Takeoff ───────────────────────────────────────────────────────────────────
+// -- Takeoff --
 export type Section = "SUBSTRUCTURE" | "SUPERSTRUCTURE";
-
 export interface TakeoffItem {
   id: string;
   project_id: string;
@@ -70,17 +59,8 @@ export interface TakeoffItem {
   updated_at: string;
 }
 
-export interface TakeoffItemCreate {
-  description: string;
-  unit: string;
-  quantity: number;
-  section?: Section;
-  notes?: string;
-}
-
-// ── BBS ───────────────────────────────────────────────────────────────────────
+// -- BBS --
 export type BarShape = "STRAIGHT" | "L_SHAPE" | "HOOK" | "U_SHAPE" | "SPIRAL";
-
 export interface BBSBar {
   id: string;
   project_id: string;
@@ -102,57 +82,7 @@ export interface BBSBar {
   created_at: string;
 }
 
-export interface BBSBarCreate {
-  member_name: string;
-  bar_diameter_mm: number;
-  bar_shape: BarShape;
-  quantity: number;
-  clear_length_m: number;
-  hook_length_mm?: number;
-  cover_top_mm?: number;
-  cover_bottom_mm?: number;
-  section?: Section;
-  notes?: string;
-  standard?: string;
-}
-
-export interface CuttingListItem {
-  diameter_mm: number;
-  cutting_length_m: number;
-  total_qty: number;
-  total_weight_kg: number;
-}
-
-// ── BOQ ───────────────────────────────────────────────────────────────────────
-export interface BOQLine {
-  item_number: number;
-  description: string;
-  unit: string;
-  quantity: number;
-  rate: number;
-  amount: number;
-  notes: string;
-}
-
-export interface BOQResult {
-  project_id: string;
-  section: string;
-  lines: BOQLine[];
-  total_amount: number;
-  currency: string;
-}
-
-export interface Rate {
-  id: string;
-  item_code: string | null;
-  description: string;
-  unit: string;
-  rate_per_unit: number;
-  rate_source: string | null;
-  region: string | null;
-}
-
-// ── Cost Library ─────────────────────────────────────────────────────────────
+// -- Cost Library --
 export interface RateSourceOut {
   id: string;
   title: string;
@@ -173,6 +103,8 @@ export interface RateItemOut {
   unit: string;
   direct_cost: number;
   currency: string;
+  sub_category?: string;
+  work_category?: string;
   source_page: number | null;
   confidence: number;
   children?: RateItemOut[];

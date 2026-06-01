@@ -1,0 +1,46 @@
+3,EXCAVATION AND EARTH WORK. (manual),,
+,20cm. Clearing on wet & black soil.,m²,96.92
+3.1,Bulk excavation in loose and dry soil.,,
+3.1. l,to a depth not exceeding 1500mm,m³,706.15
+3.1 .2,to a depth exceeding 1500mm but not exceeding 3000mm,m³,814.79
+3.1 .3,to a depth exceeding 3000mm but not exceeding 4500mm,m³,921.07
+3.2,Bulk excavation in soft rock.,,
+3.2.1,not exceeding 1.5m,m³,"1,406.61"
+3.2.2,"Over 1.50m, not exceeding 3m",m³,"1,582.44"
+3.2.3,"Over 3.0m,not exceeding 4.5m",m³,"l,947.62"
+3.3,Bulk excavation in hard rock.,,
+3.3.],not exceeding 1.50m,m³,"2,531.90"
+3.3.2,"Over 1.5m,not exceeding 3m",m³,"2,971.37"
+3.3.3,"Over 3.0m,not exceeding 4.5m",m³,"4,571.33"
+3.4,Pit & Trench excavation in loose and dry soil.,,
+3.4.1,not exceeding 1 500cm,m³,784.61
+3.4.2,to a depth exceeding 1500cm but not exceeding 3000mm,m³,962.93
+3.4.3,to a depth exceeding 3000cm but not exceeding 4500mm,m³,"1, 24.04"
+3.5,Pit & Trench excavation in soft rock,,
+3.5.1,not exceeding 1.5m,m³,"1,687.93"
+3.5.2,"Over 15.0m,not exceeding 3.00m",m³,"2,109.92"
+3.5.3,"Over 3.0m,not exceeding 4.5m",m³,"2,531.90"
+3.6,Pit Excavation in hard rock,,
+3.6.1,not exceeding 1.5m,m³,"2,813.22"
+3.6.2,"Over 1.5m,not exceeding 3m",m³,"3,231.28"
+3.6.3,"Over 3m,not exceeding 4.5m",m³,"5,659.75"
+3.6,Trench Excavation in hard rock,,
+3.6.1,not exceeding 1.5m,m³,"3,246.03"
+3.6.2,"Over 1.5m,not exceeding 3m",m³,"4,365.35"
+3.6.3,"Over 3m,not exceeding 4.5m",m³,"7,446.77"
+,Back fill,,
+1,Back fill selected excavated mats. from the site. (Manualy),m³,848.39
+3.7.2,"Back fill selected excavated mats. from out side the site. (Upto 20km
+ from Quarry site as long as Project Site) (Manualy)",m³,"3,043.21"
+3.7.3,"Back fi[l selected excavated mats. from out side the site. (Upto l5km
+ from Quarry site as long us Project Site) (Mummy)",m³,"2,517.13"
+3.7.4,"Back fi11 setected excavated mats. from out side the site. (Upto 1
+ from Quarry site as long as Project Site) (Manualy)",m³,"2,157.76"
+3.7.5,"Back fiIl selected excavated mats. from out side the site. (Upto 5km
+ from Quarry site as long as Project Site) (Manualy)",m³,"I,798.38"
+3.7.3,Load and Cart away surplus excavated materials to 5km,m³,189.84
+3.7.4,Load and Cart away surplus excavated materials to 10kin,m³,625.59
+3.75,load and Cart away surplus excavated materials to l5km,m³,730.88
+3.7.6,Load and Cart away surplus excavated materials to 20km,m³,872.56
+3.7.6,25cm. thick basaltic hard core.(basaltic stone) (Manually),m²,"1,030.57"
+3.7.7,"Supply, Spread & Compact Red Ash.",m³,"4,259.46"

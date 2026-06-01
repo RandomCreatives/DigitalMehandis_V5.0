@@ -1,0 +1,344 @@
+[
+    {
+        "ID":"2.1",
+        "Description":"Site clearance and excavation (mechanized)",
+        "Unit":null,
+        "Cost":null
+    },
+    {
+        "ID":"2.1 .1",
+        "Description":"20cm. Clearing on wet & black soil.",
+        "Unit":"m\u00b2",
+        "Cost":"96.92"
+    },
+    {
+        "ID":"2.2",
+        "Description":"Bulk excavation in loose & dry soil",
+        "Unit":null,
+        "Cost":null
+    },
+    {
+        "ID":"2.2.1",
+        "Description":"to a depth not exceeding 1.5m",
+        "Unit":"m\u00b3",
+        "Cost":"368.82"
+    },
+    {
+        "ID":"2.2.2",
+        "Description":"to a depth exceeding 1.50m but not exceeding 3.00m",
+        "Unit":"m\u00b3",
+        "Cost":"452.1"
+    },
+    {
+        "ID":"2.2.3",
+        "Description":"to a depth exceeding 3.00m bul not exceeding 4.50m",
+        "Unit":"m\u00b3",
+        "Cost":"547.47"
+    },
+    {
+        "ID":"2.2.4",
+        "Description":"to a depth exceeding 4.50m but not exceeding 6.00m",
+        "Unit":"m\u00b3",
+        "Cost":"625.67"
+    },
+    {
+        "ID":"2.2.5",
+        "Description":"to a depth exceeding 6.00m but not exceeding 7.50m",
+        "Unit":"m\u00b3",
+        "Cost":"729.95"
+    },
+    {
+        "ID":"2.2.6",
+        "Description":"to a depth exceeding 7.50m but not exceeding 9.00m",
+        "Unit":"m\u00b3",
+        "Cost":"875.94"
+    },
+    {
+        "ID":"2.2.7",
+        "Description":"to a depth exceeding 9.00m but not exceeding l0.50m",
+        "Unit":"m\u00b3",
+        "Cost":"973.27"
+    },
+    {
+        "ID":"2.3",
+        "Description":"Pit excavation in loose and dry soil",
+        "Unit":null,
+        "Cost":null
+    },
+    {
+        "ID":"2.3.1",
+        "Description":"to a depth not exceeding 1500cm loose and dry soil",
+        "Unit":"m\u00b3",
+        "Cost":"417.12"
+    },
+    {
+        "ID":"2.3.2",
+        "Description":"to a depth not exceeding 1500cmbut not exceeding 3000mm",
+        "Unit":"m\u00b3",
+        "Cost":"476.7"
+    },
+    {
+        "ID":"2.3.3",
+        "Description":"to a depth not exceeding 3000cmbut not exceeding 4500mm",
+        "Unit":"m\u00b3",
+        "Cost":"556.15"
+    },
+    {
+        "ID":"2.3.4",
+        "Description":"to a depth not exceeding 4500cmbut not exceeding 6000mm",
+        "Unit":"m\u00b3",
+        "Cost":"667. 9"
+    },
+    {
+        "ID":"2.3.5",
+        "Description":"to a depth not exceeding 6000cmbut not exceeding 7500mm",
+        "Unit":"m\u00b3",
+        "Cost":"834.23"
+    },
+    {
+        "ID":"2.3.6",
+        "Description":"to a depth not exceeding 7500cmbut not exceeding 9000mm",
+        "Unit":"m\u00b3",
+        "Cost":"1,053.77"
+    },
+    {
+        "ID":"2.3.7",
+        "Description":"to a depth not exceeding 9000cmbut not exceeding 10500mm",
+        "Unit":"m\u00b3",
+        "Cost":"1,430.11"
+    },
+    {
+        "ID":"2.4",
+        "Description":"Bulk excavation in soft rock",
+        "Unit":null,
+        "Cost":null
+    },
+    {
+        "ID":"2.4.1",
+        "Description":"not exceeding 1.5m",
+        "Unit":"m\u00b3",
+        "Cost":"666.44"
+    },
+    {
+        "ID":"2.4.2",
+        "Description":"Over 1.50m , not exceeding 3m",
+        "Unit":"m\u00b3",
+        "Cost":"759.96"
+    },
+    {
+        "ID":"2.4.3",
+        "Description":"Over 3.0m,not exceeding 4.5m",
+        "Unit":"m\u00b3",
+        "Cost":"922.48"
+    },
+    {
+        "ID":"2.4.4",
+        "Description":"Over 4.5m,not exceeding 6.0rn",
+        "Unit":"m\u00b3",
+        "Cost":"1,317.83"
+    },
+    {
+        "ID":"2.4.5",
+        "Description":"Over 6.0m,not exceeding 7.5m",
+        "Unit":"m\u00b3",
+        "Cost":"l,882.62"
+    },
+    {
+        "ID":"2.4.6",
+        "Description":"Over 7.5m,not exceeding 9.0m",
+        "Unit":"m\u00b3",
+        "Cost":"2,689.46"
+    },
+    {
+        "ID":"2.4.7",
+        "Description":"Over 9.0m,not exceeding 10.5in",
+        "Unit":"m\u00b3",
+        "Cost":"3,842.08"
+    },
+    {
+        "ID":"2.5",
+        "Description":"Pit excavation in soft rock",
+        "Unit":null,
+        "Cost":null
+    },
+    {
+        "ID":"2.5.1",
+        "Description":"not exceeding 1.5m",
+        "Unit":"m\u00b3",
+        "Cost":"829.34"
+    },
+    {
+        "ID":"2.5.2",
+        "Description":"Over 1.50m , not exceeding 3m",
+        "Unit":"m\u00b3",
+        "Cost":"9 I 1.37"
+    },
+    {
+        "ID":"2.5.3",
+        "Description":"Over 3.0m,not exceeding 4.5m",
+        "Unit":"m\u00b3",
+        "Cost":"1128.36"
+    },
+    {
+        "ID":"2.5,4",
+        "Description":"Over 4.5m,not exceeding 6.0rn",
+        "Unit":"m\u00b3",
+        "Cost":"1116.84"
+    },
+    {
+        "ID":"2.5.5",
+        "Description":"Over 6.0m,not exceeding 7.5m",
+        "Unit":"m\u00b3",
+        "Cost":"2,302.78"
+    },
+    {
+        "ID":"2.5.6",
+        "Description":"Over 7.5m,not exceeding 9.0m",
+        "Unit":"m\u00b3",
+        "Cost":"3,289.68"
+    },
+    {
+        "ID":"2.5.7",
+        "Description":"Over 9.0m,not exceeding 10.5in",
+        "Unit":"m\u00b3",
+        "Cost":"4,699.54"
+    },
+    {
+        "ID":"2.6",
+        "Description":"Bulk excavation in hard rock",
+        "Unit":null,
+        "Cost":null
+    },
+    {
+        "ID":"2.6 1",
+        "Description":"not exceeding 1.5m",
+        "Unit":"m\u00b3",
+        "Cost":"1,367.93"
+    },
+    {
+        "ID":"2.6 2",
+        "Description":"Over 1.50m , not exceeding 3m",
+        "Unit":"m\u00b3",
+        "Cost":"1,706.24"
+    },
+    {
+        "ID":"2.6.3",
+        "Description":"Over 3.0m,not exceeding 4.5m",
+        "Unit":"m\u00b3",
+        "Cost":"2,050.73"
+    },
+    {
+        "ID":"2.6.4",
+        "Description":"Over 4.5m,not exceeding 6.0rn",
+        "Unit":"m\u00b3",
+        "Cost":"2,791.68"
+    },
+    {
+        "ID":"2.6.5",
+        "Description":"Over 6.0m,not exceeding 7.5m",
+        "Unit":"m\u00b3",
+        "Cost":"3,489.61"
+    },
+    {
+        "ID":"2.6.6",
+        "Description":"Over 7.5m,not exceeding 9.0m",
+        "Unit":"m\u00b3",
+        "Cost":"4,362.01"
+    },
+    {
+        "ID":"2.6.7",
+        "Description":"Over 9.0m,not exceeding 10.5in",
+        "Unit":"m\u00b3",
+        "Cost":"5,131.77"
+    },
+    {
+        "ID":"2.7",
+        "Description":"Pit excavation in hard rock",
+        "Unit":null,
+        "Cost":null
+    },
+    {
+        "ID":"2.7.l",
+        "Description":"not exceeding 1.5m",
+        "Unit":"m\u00b3",
+        "Cost":"1,658.69"
+    },
+    {
+        "ID":"2.7.2",
+        "Description":"Over 1.50m , not exceeding 3m",
+        "Unit":"m\u00b3",
+        "Cost":"2,050.58"
+    },
+    {
+        "ID":"2.7.3",
+        "Description":"Over 3.0m,not exceeding 4.5m",
+        "Unit":"m\u00b3",
+        "Cost":"2,665.75"
+    },
+    {
+        "ID":"2.7.4",
+        "Description":"Over 4.5m,not exceeding 6.0rn",
+        "Unit":"m\u00b3",
+        "Cost":"3,626.87"
+    },
+    {
+        "ID":"2.7.5",
+        "Description":"Over 6.0m,not exceeding 7.5m",
+        "Unit":"m\u00b3",
+        "Cost":"5, l 81.25"
+    },
+    {
+        "ID":"2.7.6",
+        "Description":"Over 7.5m,not exceeding 9.0m",
+        "Unit":"m\u00b3",
+        "Cost":"7,401 78"
+    },
+    {
+        "ID":"2.7.7",
+        "Description":"Over 9.0m,not exceeding 10.5in",
+        "Unit":"m\u00b3",
+        "Cost":"10573.97"
+    },
+    {
+        "ID":"2.8",
+        "Description":"Back fill",
+        "Unit":null,
+        "Cost":null
+    },
+    {
+        "ID":"2.8. 1",
+        "Description":"Back fill selected excavated materials from the site.(Mechanized)",
+        "Unit":"m\u00b3",
+        "Cost":"975.65"
+    },
+    {
+        "ID":"2.8.2",
+        "Description":"Back fill selected excavated materials from out side the site. (Upto from Quarry site as long as Ploject Site) (Mechanized)",
+        "Unit":"m\u00b3",
+        "Cost":"3,059.40"
+    },
+    {
+        "ID":"2.8.3",
+        "Description":"Back fill selected excavated mats. from out side the site. (Upto l5km from Quarry site as long as Project Site) (Mechanized)",
+        "Unit":"m\u00b3",
+        "Cost":"2,533.33"
+    },
+    {
+        "ID":"2.8.4",
+        "Description":"Back fill selected excavated mats. from out side the site. (Upto l0km from Quarry site as long as Project Site) (Mechanized)",
+        "Unit":"m\u00b3",
+        "Cost":"2,173.95"
+    },
+    {
+        "ID":"2.8.5",
+        "Description":"Baek fill selected excavated mats. from out site the site. (Upto Skin from Quarry site as long as Project Site) (Mechanized)",
+        "Unit":"m\u00b3",
+        "Cost":"1,814.58"
+    },
+    {
+        "ID":"2.8.6",
+        "Description":"25cm. thick basaltic hard core. (Mechanized)",
+        "Unit":"m\u00b3",
+        "Cost":"1059.2"
+    }
+]
