@@ -11,6 +11,8 @@ class RateItemBase(BaseModel):
     direct_cost: float
     currency: str = "ETB"
     region: Optional[str] = None
+    work_category: Optional[str] = None
+    sub_category: Optional[str] = None
     source_page: Optional[int] = None
     confidence: float = 1.0
 
