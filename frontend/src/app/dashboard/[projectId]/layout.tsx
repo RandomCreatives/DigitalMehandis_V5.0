@@ -9,7 +9,7 @@ import {
   DollarSign, Database,
   Sparkles, ScrollText,
   ChevronLeft, ChevronRight, ChevronDown,
-  Settings2, Zap, BookOpen,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,28 +26,33 @@ const GROUPS = [
   },
   {
     label: "Quantities",
-    icon: Table2,
+    icon: Layers,
     items: [
-      { label: "Take-off",     slug: "takeoff",       icon: Table2 },
-      { label: "BOQ",          slug: "boq",           icon: Layers },
-      { label: "BOQ Items",    slug: "boq-items",     icon: ClipboardList },
-      { label: "Bar Schedule", slug: "bbs",           icon: BarChart3 },
-      { label: "Pricing",      slug: "pricing",       icon: Settings2 },
-      { label: "Rate Match",   slug: "rate-matching", icon: Zap },
+      { label: "BOQ",       slug: "boq",       icon: Layers },
+      { label: "BOQ Items", slug: "boq-items", icon: ClipboardList },
     ],
   },
   {
     label: "Rates",
     icon: DollarSign,
     items: [
-      { label: "Cost Data",  slug: "cost-data",    icon: Database },
-      { label: "Gov. Rates", slug: "rate-library",  icon: BookOpen },
+      { label: "Cost Data",  slug: "cost-data",   icon: Database },
+      { label: "Gov. Rates", slug: "rate-library", icon: BookOpen },
     ],
   },
 ];
 
+// Standalone tabs (not in a dropdown group)
+const STANDALONE_TABS = [
+  { label: "Take-off",     slug: "takeoff", icon: Table2 },
+  { label: "Bar Schedule", slug: "bbs",     icon: BarChart3 },
+];
+
 // Flat list for prev/next navigation (all slugs in logical order)
-const ALL_SLUGS = GROUPS.flatMap((g) => g.items.map((i) => i.slug));
+const ALL_SLUGS = [
+  ...GROUPS.flatMap((g) => g.items.map((i) => i.slug)),
+  ...STANDALONE_TABS.map((t) => t.slug),
+];
 
 // ── Dropdown tab component ────────────────────────────────────────────────────
 
@@ -177,9 +182,34 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
       {/* ── Tab bar ── */}
       <nav className="bg-white border-b border-outline-variant px-4 flex items-center shrink-0">
 
-        {/* Left: grouped dropdown tabs */}
+        {/* Left: grouped dropdown tabs + standalone tabs in order */}
         <div className="flex items-center gap-0.5 flex-1">
-          {GROUPS.map((group) => (
+          {/* Drawings ▾ */}
+          <GroupTab
+            group={GROUPS[0]}
+            projectId={projectId}
+            activeSlug={activeSlug}
+          />
+
+          {/* Take-off · Bar Schedule — standalone */}
+          {STANDALONE_TABS.map((tab) => (
+            <Link
+              key={tab.slug}
+              href={`/dashboard/${projectId}/${tab.slug}`}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-3 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors",
+                activeSlug === tab.slug
+                  ? "border-accent text-accent"
+                  : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant"
+              )}
+            >
+              <tab.icon size={14} />
+              {tab.label}
+            </Link>
+          ))}
+
+          {/* Quantities ▾ · Rates ▾ */}
+          {GROUPS.slice(1).map((group) => (
             <GroupTab
               key={group.label}
               group={group}
