@@ -173,8 +173,6 @@ export interface RateItemOut {
   unit: string;
   direct_cost: number;
   currency: string;
-  sub_category?: string;
-  work_category?: string;
   source_page: number | null;
   confidence: number;
   children?: RateItemOut[];
