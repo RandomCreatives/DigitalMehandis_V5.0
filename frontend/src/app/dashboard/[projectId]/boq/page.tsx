@@ -5,15 +5,18 @@ import { useProjectStore } from "@/store/projectStore";
 import { api } from "@/lib/api";
 import type { BOQResult, BOQLine } from "@/types";
 import { formatCurrency } from "@/lib/utils";
-import { FileSpreadsheet, FileText, RefreshCw } from "lucide-react";
+import { FileSpreadsheet, FileText, RefreshCw, LayoutGrid, Table as TableIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { GristWorkbench } from "@/components/grist/GristWorkbench";
 
 type SectionType = "COMBINED" | "SUBSTRUCTURE" | "SUPERSTRUCTURE";
+type ViewMode = "STANDARD" | "GRIST";
 
 export default function BOQPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const { current } = useProjectStore();
   const [section, setSection] = useState<SectionType>("COMBINED");
+  const [viewMode, setViewMode] = useState<ViewMode>("STANDARD");
   const [boq, setBoq]         = useState<BOQResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -61,97 +64,125 @@ export default function BOQPage() {
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
+            {/* View Mode Toggle */}
+            <div className="bg-surface-container p-1 rounded-lg flex items-center gap-1 mr-4">
+              <button
+                onClick={() => setViewMode("STANDARD")}
+                className={cn(
+                  "p-1.5 rounded-md flex items-center gap-1.5 text-xs font-bold transition-all",
+                  viewMode === "STANDARD" ? "bg-white shadow-sm text-accent" : "text-on-surface-variant hover:text-on-surface"
+                )}
+              >
+                <TableIcon size={14} /> Standard
+              </button>
+              <button
+                onClick={() => setViewMode("GRIST")}
+                className={cn(
+                  "p-1.5 rounded-md flex items-center gap-1.5 text-xs font-bold transition-all",
+                  viewMode === "GRIST" ? "bg-white shadow-sm text-accent" : "text-on-surface-variant hover:text-on-surface"
+                )}
+              >
+                <LayoutGrid size={14} /> Grist Workbench
+              </button>
+            </div>
+
             <button onClick={exportExcel} disabled={!boq}
-              className="btn-secondary flex items-center gap-2 disabled:opacity-40">
-              <FileSpreadsheet size={15} /> Export to Excel
+              className="btn-secondary flex items-center gap-2 disabled:opacity-40 text-xs">
+              <FileSpreadsheet size={14} /> Export Excel
             </button>
             <button onClick={exportPdf} disabled={!boq}
-              className="btn-primary flex items-center gap-2 disabled:opacity-40">
-              <FileText size={15} /> Export PDF
+              className="btn-primary flex items-center gap-2 disabled:opacity-40 text-xs">
+              <FileText size={14} /> Export PDF
             </button>
           </div>
         </div>
 
-        {/* Section + generate */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {(["COMBINED", "SUBSTRUCTURE", "SUPERSTRUCTURE"] as SectionType[]).map((s) => (
-            <button key={s} onClick={() => setSection(s)}
-              className={cn("section-tab", section === s ? "active" : "inactive")}>
-              {s.charAt(0) + s.slice(1).toLowerCase()}
-            </button>
-          ))}
-          <button onClick={generate} disabled={loading}
-            className="btn-primary flex items-center gap-2 ml-auto">
-            <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
-            {loading ? "Generating…" : "Generate BOQ"}
-          </button>
-        </div>
-
-        {/* BOQ Table */}
-        {boq ? (
-          <div className="panel overflow-x-auto">
-            <div className="px-6 py-3 border-b border-outline-variant flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-on-surface">Detailed Bill of Quantities (BoQ)</h3>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="chip chip-revision text-xs">REVISED OCT 2023</span>
-                  <span className="text-xs text-on-surface-variant">CURRENCY: {boq.currency}</span>
-                </div>
-              </div>
-              <span className="text-xs text-on-surface-variant">{boq.lines.length} items</span>
-            </div>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th className="w-8"></th>
-                  <th>Item</th>
-                  <th>Description</th>
-                  <th>Unit</th>
-                  <th className="num">Quantity</th>
-                  <th className="num">Rate (ETB)</th>
-                  <th className="num">Amount (ETB)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {boq.lines.map((line: BOQLine, i: number) => (
-                  <tr key={line.item_number}
-                    className={cn(selected.has(i) && "!bg-orange-50 ring-1 ring-inset ring-accent/30")}>
-                    <td>
-                      <input type="checkbox" checked={selected.has(i)} onChange={() => toggleSelect(i)}
-                        className="accent-accent" />
-                    </td>
-                    <td className="font-mono text-xs text-on-surface-variant">{line.item_number}</td>
-                    <td className="font-medium text-on-surface">{line.description}</td>
-                    <td className="text-on-surface-variant">{line.unit}</td>
-                    <td className="num">{line.quantity.toFixed(3)}</td>
-                    <td className="num">{line.rate.toLocaleString()}</td>
-                    <td className="num font-semibold">{line.amount.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={6} className="text-right font-bold text-on-surface uppercase text-xs tracking-wide">
-                    Total Carried to Summary
-                  </td>
-                  <td className="num text-accent font-bold text-base">
-                    {formatCurrency(boq.total_amount, boq.currency)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+        {viewMode === "GRIST" ? (
+          <GristWorkbench docId={current?.grist_doc_id || null} />
         ) : (
-          <div className="card text-center py-16 text-on-surface-variant">
-            <RefreshCw size={32} className="mx-auto mb-3 text-outline" />
-            <p className="font-medium">Click &quot;Generate BOQ&quot; to calculate your Bill of Quantities.</p>
-            <p className="text-sm mt-1">Make sure you have take-off items and rates configured.</p>
-          </div>
+          <>
+            {/* Section + generate */}
+            <div className="flex items-center gap-3 flex-wrap">
+              {(["COMBINED", "SUBSTRUCTURE", "SUPERSTRUCTURE"] as SectionType[]).map((s) => (
+                <button key={s} onClick={() => setSection(s)}
+                  className={cn("section-tab", section === s ? "active" : "inactive")}>
+                  {s.charAt(0) + s.slice(1).toLowerCase()}
+                </button>
+              ))}
+              <button onClick={generate} disabled={loading}
+                className="btn-primary flex items-center gap-2 ml-auto">
+                <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+                {loading ? "Generating…" : "Generate BOQ"}
+              </button>
+            </div>
+
+            {/* BOQ Table */}
+            {boq ? (
+              <div className="panel overflow-x-auto">
+                <div className="px-6 py-3 border-b border-outline-variant flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-on-surface">Detailed Bill of Quantities (BoQ)</h3>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="chip chip-revision text-xs">REVISED OCT 2023</span>
+                      <span className="text-xs text-on-surface-variant">CURRENCY: {boq.currency}</span>
+                    </div>
+                  </div>
+                  <span className="text-xs text-on-surface-variant">{boq.lines.length} items</span>
+                </div>
+                <table className="data-table text-sm">
+                  <thead>
+                    <tr>
+                      <th className="w-8"></th>
+                      <th>Item</th>
+                      <th>Description</th>
+                      <th>Unit</th>
+                      <th className="num">Quantity</th>
+                      <th className="num">Rate (ETB)</th>
+                      <th className="num">Amount (ETB)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {boq.lines.map((line: BOQLine, i: number) => (
+                      <tr key={line.item_number}
+                        className={cn(selected.has(i) && "!bg-orange-50 ring-1 ring-inset ring-accent/30")}>
+                        <td>
+                          <input type="checkbox" checked={selected.has(i)} onChange={() => toggleSelect(i)}
+                            className="accent-accent" />
+                        </td>
+                        <td className="font-mono text-[10px] text-on-surface-variant">{line.item_number}</td>
+                        <td className="font-medium text-on-surface">{line.description}</td>
+                        <td className="text-on-surface-variant">{line.unit}</td>
+                        <td className="num">{line.quantity.toFixed(3)}</td>
+                        <td className="num">{line.rate.toLocaleString()}</td>
+                        <td className="num font-semibold">{line.amount.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={6} className="text-right font-bold text-on-surface uppercase text-xs tracking-wide">
+                        Total Carried to Summary
+                      </td>
+                      <td className="num text-accent font-bold text-base">
+                        {formatCurrency(boq.total_amount, boq.currency)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            ) : (
+              <div className="card text-center py-16 text-on-surface-variant">
+                <RefreshCw size={32} className="mx-auto mb-3 text-outline" />
+                <p className="font-medium">Click &quot;Generate BOQ&quot; to calculate your Bill of Quantities.</p>
+                <p className="text-sm mt-1">Make sure you have take-off items and rates configured.</p>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* Selection bar */}
-      {selected.size > 0 && (
+      {selected.size > 0 && viewMode === "STANDARD" && (
         <div className="sticky bottom-0 bg-primary text-white px-6 py-3 flex items-center gap-4">
           <span className="text-accent font-bold text-sm">ℹ ITEM SELECTION ACTIVE</span>
           <span className="text-sm text-white/80 flex-1">

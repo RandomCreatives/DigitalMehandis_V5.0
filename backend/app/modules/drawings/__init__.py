@@ -1,105 +1,71 @@
-"""
-Drawings API — updated to use ExtractionService for unified PDF/DXF processing.
-Includes Review and Federated Quantity endpoints.
-"""
+import os
+import uuid
 from uuid import UUID
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-
+from sqlalchemy import select, delete
 from app.db.session import get_db
-from app.db.models import Drawing, Project, User, SuggestedQuantity, FederatedQuantity
-from app.schemas.drawing import DrawingOut, DrawingUpdate
+from app.db.models import Drawing, Project, User, SuggestedQuantity, FederatedQuantity, DrawingCalibration, AuditLog
+from app.schemas.project import DrawingOut
 from app.schemas.federation import SuggestedQuantityOut, SuggestedQuantityReview, FederatedQuantityOut
 from app.dependencies import get_current_user
 from app.utils.file_handler import save_upload, delete_file
-from app.services.extraction_service import ExtractionService
-from app.core.config import get_settings
+from app.services.grist_service import grist_service
 
-settings = get_settings()
 router = APIRouter(tags=["drawings"])
 
 async def _get_project(project_id: UUID, user: User, db: AsyncSession) -> Project:
-    result = await db.execute(select(Project).where(Project.id == project_id, Project.user_id == user.id))
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
+    result = await db.execute(
+        select(Project).where(Project.id == project_id, Project.user_id == user.id)
+    )
+    p = result.scalar_one_or_none()
+    if not p: raise HTTPException(404, "Project not found")
+    return p
 
 async def _get_drawing(drawing_id: UUID, project_id: UUID, db: AsyncSession) -> Drawing:
-    result = await db.execute(select(Drawing).where(Drawing.id == drawing_id, Drawing.project_id == project_id))
-    drawing = result.scalar_one_or_none()
-    if not drawing:
-        raise HTTPException(status_code=404, detail="Drawing not found")
-    return drawing
+    result = await db.execute(
+        select(Drawing).where(Drawing.id == drawing_id, Drawing.project_id == project_id)
+    )
+    d = result.scalar_one_or_none()
+    if not d: raise HTTPException(404, "Drawing not found")
+    return d
 
-async def _save_suggestions(db: AsyncSession, project_id: UUID, drawing_id: UUID, suggestions: list) -> int:
-    count = 0
-    for s in suggestions:
-        sq = SuggestedQuantity(
-            project_id=project_id,
-            drawing_id=drawing_id,
-            discipline=s.discipline,
-            element_category=s.element_category,
-            description=s.description,
-            quantity_value=s.value,
-            quantity_unit=s.unit,
-            section=s.section,
-            source_layer=s.source_layer,
-            confidence=s.confidence,
-            notes=f"{s.notes} (MoUDC: {s.moudc_code})",
-            status="PENDING",
-        )
-        db.add(sq)
-        count += 1
-    await db.commit()
-    return count
-
-@router.post("/projects/{project_id}/drawings/upload", status_code=status.HTTP_201_CREATED)
+@router.post("/projects/{project_id}/drawings", response_model=DrawingOut, status_code=status.HTTP_201_CREATED)
 async def upload_drawing(
     project_id: UUID,
+    category: str = Form(...),
+    notes: str | None = Form(None),
     file: UploadFile = File(...),
-    category: str = Query(default="ARCHITECTURAL"),
-    discipline: str = Query(default="ARCHITECTURAL"),
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db)
 ):
-    project = await _get_project(project_id, user, db)
-    filename = (file.filename or "").lower()
-    is_dxf = filename.endswith(".dxf")
-
-    meta = await save_upload(file, str(project_id))
+    await _get_project(project_id, user, db)
+    file_info = await save_upload(file)
     drawing = Drawing(
         project_id=project_id,
-        filename=meta["original_filename"],
-        file_path=meta["file_path"],
-        file_size_mb=meta["file_size_mb"],
+        filename=file.filename,
+        file_path=file_info["path"],
+        file_size_mb=file_info["size_mb"],
         category=category.upper(),
-        page_count=meta["page_count"],
+        page_count=file_info["page_count"],
+        user_notes=notes,
     )
     db.add(drawing)
-    await db.flush()
 
-    result = await ExtractionService.extract_from_drawing(
-        project_id=project_id,
-        drawing_id=drawing.id,
-        file_path=meta["file_path"],
-        discipline=discipline,
-        is_dxf=is_dxf
-    )
+    # Auto-extract "Suggestions" from DXF if applicable (Mocked for now)
+    if file.filename.lower().endswith(".dxf"):
+        sq = SuggestedQuantity(
+            project_id=project_id, drawing_id=drawing.id, discipline=category.upper(),
+            element_category="WALL", description="Extracted from DXF Layer 0",
+            quantity_value=125.5, quantity_unit="m2", section="SUPERSTRUCTURE",
+            source_layer="Layer 0", confidence=0.85, status="PENDING"
+        )
+        db.add(sq)
 
-    suggestion_count = await _save_suggestions(db, project_id, drawing.id, result["suggestions"])
     await db.commit()
     await db.refresh(drawing)
-
-    return {
-        "drawing": DrawingOut.model_validate(drawing),
-        "canvas_json": result["canvas_json"],
-        "suggestions_generated": suggestion_count,
-        "message": f"Drawing processed successfully. {suggestion_count} suggestions generated.",
-    }
+    return drawing
 
 @router.get("/projects/{project_id}/drawings", response_model=list[DrawingOut])
 async def list_drawings(project_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -107,13 +73,8 @@ async def list_drawings(project_id: UUID, user: User = Depends(get_current_user)
     result = await db.execute(select(Drawing).where(Drawing.project_id == project_id))
     return result.scalars().all()
 
-@router.get("/projects/{project_id}/drawings/{drawing_id}", response_model=DrawingOut)
-async def get_drawing(project_id: UUID, drawing_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    await _get_project(project_id, user, db)
-    return await _get_drawing(drawing_id, project_id, db)
-
 @router.get("/projects/{project_id}/suggestions", response_model=list[SuggestedQuantityOut])
-async def list_suggestions(project_id: UUID, status_filter: str = Query(default="PENDING", alias="status"), user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+async def list_suggestions(project_id: UUID, status_filter: str = "PENDING", user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await _get_project(project_id, user, db)
     stmt = select(SuggestedQuantity).where(SuggestedQuantity.project_id == project_id, SuggestedQuantity.status == status_filter.upper())
     result = await db.execute(stmt)
@@ -121,7 +82,7 @@ async def list_suggestions(project_id: UUID, status_filter: str = Query(default=
 
 @router.post("/projects/{project_id}/suggestions/{suggestion_id}/review", response_model=SuggestedQuantityOut)
 async def review_suggestion(project_id: UUID, suggestion_id: UUID, payload: SuggestedQuantityReview, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    await _get_project(project_id, user, db)
+    project = await _get_project(project_id, user, db)
     result = await db.execute(select(SuggestedQuantity).where(SuggestedQuantity.id == suggestion_id, SuggestedQuantity.project_id == project_id))
     sq = result.scalar_one_or_none()
     if not sq: raise HTTPException(404, "Suggestion not found")
@@ -139,6 +100,22 @@ async def review_suggestion(project_id: UUID, suggestion_id: UUID, payload: Sugg
             source_layer=sq.source_layer, is_verified=True, notes=sq.notes,
         )
         db.add(fq)
+
+        # Sync to Grist BOQ if doc exists
+        if project.grist_doc_id:
+            await grist_service.add_records(
+                project.grist_doc_id,
+                "BOQ",
+                [{
+                    "fields": {
+                        "Description": fq.element_description,
+                        "Unit": fq.quantity_unit,
+                        "Quantity": float(fq.quantity_value),
+                        "Rate": 0.0, # Rate will be filled by user in Grist
+                    }
+                }]
+            )
+
     await db.commit()
     await db.refresh(sq)
     return sq

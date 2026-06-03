@@ -72,6 +72,7 @@ class Project(Base):
     unit_system: Mapped[str] = mapped_column(String(10), default="METRIC")
     currency: Mapped[str] = mapped_column(String(3), default="ETB")
     rate_database_version: Mapped[str | None] = mapped_column(String(50))
+    grist_doc_id: Mapped[str | None] = mapped_column(String(100))
     scale: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)

@@ -19,6 +19,7 @@ class ProjectUpdate(BaseModel):
     code_of_practice: str | None = None
     unit_system: str | None = None
     scale: str | None = None
+    grist_doc_id: str | None
 
 
 class ProjectOut(BaseModel):
@@ -30,6 +31,7 @@ class ProjectOut(BaseModel):
     unit_system: str
     currency: str
     scale: str | None
+    grist_doc_id: str | None
     created_at: datetime
     updated_at: datetime
 

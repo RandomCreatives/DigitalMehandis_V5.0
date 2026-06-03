@@ -6,6 +6,7 @@ from app.db.session import get_db
 from app.db.models import Project, User
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectOut
 from app.dependencies import get_current_user
+from app.services.grist_service import grist_service
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -29,6 +30,12 @@ async def list_projects(user: User = Depends(get_current_user), db: AsyncSession
 @router.post("", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
 async def create_project(payload: ProjectCreate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     project = Project(**payload.model_dump(), user_id=user.id, rate_database_version="1.0")
+
+    # Initialize Grist document for the project
+    grist_doc_id = await grist_service.create_doc(f"QS - {project.name}")
+    if grist_doc_id:
+        project.grist_doc_id = grist_doc_id
+
     db.add(project)
     await db.commit()
     await db.refresh(project)

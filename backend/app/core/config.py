@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE_MB: int = 100
 
+    # Grist Configuration
+    GRIST_API_KEY: str = "admin"
+    GRIST_BASE_URL: str = "http://localhost:8484"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

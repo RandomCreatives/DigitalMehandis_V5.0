@@ -25,6 +25,7 @@ export interface Project {
   code_of_practice: string | null;
   unit_system: "METRIC" | "IMPERIAL";
   currency: string;
+  grist_doc_id: string | null;
   scale: string | null;
   created_at: string;
   updated_at: string;
@@ -80,6 +81,52 @@ export interface BBSBar {
   section: Section | null;
   notes: string | null;
   created_at: string;
+  standard?: string;
+  bend_deduction_mm?: number;
+}
+
+export interface BBSBarCreate {
+  project_id?: string;
+  bar_mark?: string | null;
+  member_name: string;
+  bar_diameter_mm: number;
+  bar_shape: BarShape;
+  quantity: number;
+  clear_length_m: number;
+  hook_length_mm: number;
+  cover_top_mm: number;
+  cover_bottom_mm: number;
+  lap_length_mm?: number | null;
+  section: Section | null;
+  notes?: string | null;
+  standard?: string;
+  bend_deduction_mm?: number;
+}
+
+export interface CuttingListItem {
+  diameter_mm: number;
+  cutting_length_m: number;
+  total_qty: number;
+  total_weight_kg: number;
+}
+
+// -- BOQ --
+export interface BOQLine {
+  item_number: number;
+  description: string;
+  unit: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+  notes: string;
+}
+
+export interface BOQResult {
+  project_id: string;
+  section: string;
+  lines: BOQLine[];
+  total_amount: number;
+  currency: string;
 }
 
 // -- Cost Library --
@@ -103,9 +150,12 @@ export interface RateItemOut {
   unit: string;
   direct_cost: number;
   currency: string;
+  grist_doc_id: string | null;
   sub_category?: string;
   work_category?: string;
   source_page: number | null;
   confidence: number;
   children?: RateItemOut[];
 }
+
+export interface TakeoffItemCreate extends Omit<TakeoffItem, 'id' | 'created_at' | 'updated_at'> {}

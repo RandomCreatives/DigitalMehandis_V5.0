@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  grist:
+    image: gristlabs/grist:latest
+    restart: unless-stopped
+    ports:
+      - "8484:8484"
+    environment:
+      - APP_HOME_URL=http://localhost:8484
+      - GRIST_SINGLE_ORG=docs
+      - GRIST_SUPPORT_ANON=true
+      # Management DB - using internal SQLite for prototype simplicity,
+      # or can point to a local Postgres if required.
+      - GRIST_DATA_DIR=/persist
+    volumes:
+      - grist_data:/persist
+
+volumes:
+  grist_data:

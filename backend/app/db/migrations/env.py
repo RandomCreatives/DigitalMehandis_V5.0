@@ -4,8 +4,8 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from app.db.base import Base
-from app.db import models  # noqa: F401 — ensure Phase 1 models are registered
-from app.db import models_phase2  # noqa: F401 — ensure Phase 2 models are registered
+from app.db import models
+from app.db import models_phase2
 from app.core.config import get_settings
 
 config = context.config
@@ -14,7 +14,15 @@ settings = get_settings()
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Handle SSL and URL for asyncpg
+db_url = settings.DATABASE_URL
+connect_args = {}
+if "neon.tech" in db_url:
+    connect_args["ssl"] = True
+    if "sslmode=" in db_url:
+        db_url = db_url.split("?")[0]
+
+config.set_main_option("sqlalchemy.url", db_url)
 target_metadata = Base.metadata
 
 
@@ -32,10 +40,13 @@ def do_run_migrations(connection):
 
 
 async def run_async_migrations() -> None:
+    configuration = config.get_section(config.config_ini_section, {})
+    # Add connect_args to configuration if needed
     connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
