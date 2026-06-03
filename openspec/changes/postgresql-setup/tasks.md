@@ -11,6 +11,6 @@
 
 ## 3. Migration and Verification
 
-- [ ] 3.1 Run `alembic upgrade head` against the new PostgreSQL instance
-- [ ] 3.2 Verify all tables are created correctly in PostgreSQL
-- [ ] 3.3 Run backend test suite to ensure functionality remains intact
+- [x] 3.1 Run `alembic upgrade head` against the new PostgreSQL instance
+- [x] 3.2 Verify all tables are created correctly in PostgreSQL
+- [x] 3.3 Run backend test suite to ensure functionality remains intact
