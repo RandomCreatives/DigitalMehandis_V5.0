@@ -1,5 +1,6 @@
 from uuid import UUID
 from datetime import datetime, timezone
+import math
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -8,12 +9,14 @@ from app.db.models import (
     Project, User, Drawing, DrawingCalibration, Measurement,
     SuggestedQuantity, ProjectElement, QuantitySource, AuditLog
 )
+from app.db.models_cost import RateItem
 from app.schemas.measurements import (
     MeasurementCreate, MeasurementUpdate, MeasurementOut,
     PromoteToQuantityPayload
 )
 from app.dependencies import get_current_user
 from app.services.grist_service import grist_service
+from app.services.rate_matching_service import RateMatchingService
 
 router = APIRouter(tags=["measurements"])
 
@@ -35,33 +38,43 @@ def _compute_measurement(
     points: list,
     calibration: DrawingCalibration | None,
     multiplier: float = 1.0,
+    category: str = "GENERAL"
 ):
-    """
-    Computes real-world value based on pixels and calibration.
-    """
-    if measurement_type == "ANNOTATION":
-        return 0.0, 0.0, "N/A", 1.0
-
+    cat = category.upper()
+    if measurement_type == "ANNOTATION": return 0.0, 0.0, "N/A", 1.0
     if not calibration:
-        # Default 1:1 if no calibration (unlikely in prod)
-        raw = 1.0
-        return raw, raw * multiplier, "px", 1.0
-
+        if measurement_type == "COUNT": return float(len(points)), float(len(points)) * multiplier, "Nr", 1.0
+        return 0.0, 0.0, "px", 1.0
     scale = float(calibration.scale_factor)
-    unit = calibration.real_unit
-
-    # Simplified logic for example
+    raw_px = 0.0
     if measurement_type == "LENGTH":
-        # Sum of distances between points
-        raw = 100.0 # Placeholder
+        for i in range(len(points) - 1):
+            p1, p2 = points[i], points[i+1]
+            raw_px += math.sqrt((p2['x'] - p1['x'])**2 + (p2['y'] - p1['y'])**2)
+        real_len = raw_px * scale
+        final_val = real_len * multiplier
+        if cat in ["WALL", "FENCE", "CURB"]: final_unit = "m2"
+        elif cat in ["BEAM", "LINTEL", "CONDUIT"] and multiplier != 1.0: final_unit = "m3"
+        else: final_unit = "m"
     elif measurement_type == "AREA":
-        raw = 500.0 # Placeholder
+        area = 0.0
+        n = len(points)
+        for i in range(n):
+            j = (i + 1) % n
+            area += points[i]['x'] * points[j]['y']
+            area -= points[j]['x'] * points[i]['y']
+        raw_px = abs(area) / 2.0
+        real_area = raw_px * (scale ** 2)
+        final_val = real_area * multiplier
+        if cat in ["SLAB", "FOOTING", "MAT", "FLOOR"] and multiplier != 1.0: final_unit = "m3"
+        else: final_unit = "m2"
     elif measurement_type == "COUNT":
-        raw = len(points)
+        raw_px = float(len(points))
+        final_val = raw_px * multiplier
+        final_unit = "Nr"
     else:
-        raw = 0.0
-
-    return raw, raw * scale * multiplier, unit, scale
+        raw_px = 0.0; final_val = 0.0; final_unit = "unit"
+    return raw_px, final_val, final_unit, scale
 
 @router.post(
     "/projects/{project_id}/drawings/{drawing_id}/measurements",
@@ -89,10 +102,23 @@ async def create_measurement(
             select(DrawingCalibration).where(DrawingCalibration.id == payload.calibration_id)
         )
         calibration = result.scalar_one_or_none()
+    else:
+        result = await db.execute(
+            select(DrawingCalibration).where(
+                DrawingCalibration.drawing_id == drawing_id,
+                DrawingCalibration.page_number == payload.page_number,
+                DrawingCalibration.is_active == True
+            )
+        )
+        calibration = result.scalar_one_or_none()
 
     points = payload.points_json.get("points", [])
     raw_value, final_value, unit, scale_used = _compute_measurement(
-        payload.measurement_type.upper(), points, calibration, payload.multiplier
+        payload.measurement_type.upper(),
+        points,
+        calibration,
+        payload.multiplier,
+        payload.element_category
     )
 
     m = Measurement(
@@ -118,32 +144,33 @@ async def create_measurement(
     )
     db.add(m)
 
-    # Sync to Grist if doc exists
     if project.grist_doc_id:
-        await grist_service.add_records(
-            project.grist_doc_id,
-            "Measurements",
-            [{
-                "fields": {
-                    "Label": m.label,
-                    "Type": m.measurement_type,
-                    "Discipline": m.discipline,
-                    "Section": m.section,
-                    "Category": m.element_category,
-                    "Final_Value": float(m.final_value),
-                    "Unit": m.unit,
-                    "Multiplier": float(m.multiplier),
-                    "Created_At": datetime.now(timezone.utc).isoformat()
-                }
-            }]
-        )
+        try:
+            await grist_service.add_records(
+                project.grist_doc_id,
+                "Measurements",
+                [{
+                    "fields": {
+                        "Label": m.label,
+                        "Type": m.measurement_type,
+                        "Discipline": m.discipline,
+                        "Section": m.section,
+                        "Category": m.element_category,
+                        "Final_Value": float(m.final_value),
+                        "Unit": m.unit,
+                        "Multiplier": float(m.multiplier),
+                        "Created_At": datetime.now(timezone.utc).isoformat()
+                    }
+                }]
+            )
+        except Exception: pass
 
     db.add(AuditLog(
         project_id=project_id,
         user_id=user.id,
         action="MEASUREMENT_CREATED",
         entity_type="Measurement",
-        description=f"{payload.measurement_type} measurement '{payload.label}': {final_value} {unit}",
+        description=f"{payload.measurement_type} measurement '{payload.label}': {final_value:.3f} {unit}",
     ))
 
     await db.commit()
@@ -185,3 +212,28 @@ async def delete_measurement(project_id: UUID, measurement_id: UUID, user: User 
     if not m: raise HTTPException(404, "Measurement not found")
     await db.delete(m)
     await db.commit()
+
+@router.get("/projects/{project_id}/measurements/{measurement_id}/suggested-rates")
+async def get_measurement_suggested_rates(
+    project_id: UUID,
+    measurement_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    await _check_project(project_id, user, db)
+    res = await db.execute(select(Measurement).where(Measurement.id == measurement_id))
+    m = res.scalar_one_or_none()
+    if not m: raise HTTPException(404, "Measurement not found")
+
+    # Load all rates from the library (or filter by region)
+    rates_res = await db.execute(select(RateItem))
+    all_rates = rates_res.scalars().all()
+
+    matches = RateMatchingService.find_best_matches(
+        element_category=m.element_category,
+        element_description=m.label,
+        element_unit=m.unit,
+        rate_items=all_rates,
+        top_n=3
+    )
+    return matches

@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.session import get_db
 from app.db.models import Project, User
+from app.db.models_cost import ProjectPricingSettings
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectOut
 from app.dependencies import get_current_user
 from app.services.grist_service import grist_service
@@ -32,11 +33,25 @@ async def create_project(payload: ProjectCreate, user: User = Depends(get_curren
     project = Project(**payload.model_dump(), user_id=user.id, rate_database_version="1.0")
 
     # Initialize Grist document for the project
-    grist_doc_id = await grist_service.create_doc(f"QS - {project.name}")
-    if grist_doc_id:
-        project.grist_doc_id = grist_doc_id
+    try:
+        grist_doc_id = await grist_service.create_doc(f"QS - {project.name}")
+        if grist_doc_id:
+            project.grist_doc_id = grist_doc_id
+    except Exception: pass
 
     db.add(project)
+    await db.flush() # Get project.id
+
+    # Initialize Standard MoUDC Pricing Defaults (8% OH, 10% Profit)
+    pricing = ProjectPricingSettings(
+        project_id=project.id,
+        overhead_percent=8.0,
+        profit_percent=10.0,
+        tax_percent=0.0,
+        pricing_mode="ADDITIVE"
+    )
+    db.add(pricing)
+
     await db.commit()
     await db.refresh(project)
     return project

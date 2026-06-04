@@ -7,11 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app.db.session import get_db
 from app.db.models import Drawing, Project, User, SuggestedQuantity, FederatedQuantity, DrawingCalibration, AuditLog
+from app.db.models_cost import RateItem
 from app.schemas.project import DrawingOut
 from app.schemas.federation import SuggestedQuantityOut, SuggestedQuantityReview, FederatedQuantityOut
 from app.dependencies import get_current_user
 from app.utils.file_handler import save_upload, delete_file
 from app.services.grist_service import grist_service
+from app.services.rate_matching_service import RateMatchingService
 
 router = APIRouter(tags=["drawings"])
 
@@ -52,17 +54,6 @@ async def upload_drawing(
         user_notes=notes,
     )
     db.add(drawing)
-
-    # Auto-extract "Suggestions" from DXF if applicable (Mocked for now)
-    if file.filename.lower().endswith(".dxf"):
-        sq = SuggestedQuantity(
-            project_id=project_id, drawing_id=drawing.id, discipline=category.upper(),
-            element_category="WALL", description="Extracted from DXF Layer 0",
-            quantity_value=125.5, quantity_unit="m2", section="SUPERSTRUCTURE",
-            source_layer="Layer 0", confidence=0.85, status="PENDING"
-        )
-        db.add(sq)
-
     await db.commit()
     await db.refresh(drawing)
     return drawing
@@ -101,7 +92,6 @@ async def review_suggestion(project_id: UUID, suggestion_id: UUID, payload: Sugg
         )
         db.add(fq)
 
-        # Sync to Grist BOQ if doc exists
         if project.grist_doc_id:
             await grist_service.add_records(
                 project.grist_doc_id,
@@ -111,7 +101,7 @@ async def review_suggestion(project_id: UUID, suggestion_id: UUID, payload: Sugg
                         "Description": fq.element_description,
                         "Unit": fq.quantity_unit,
                         "Quantity": float(fq.quantity_value),
-                        "Rate": 0.0, # Rate will be filled by user in Grist
+                        "Rate": 0.0,
                     }
                 }]
             )
@@ -119,6 +109,29 @@ async def review_suggestion(project_id: UUID, suggestion_id: UUID, payload: Sugg
     await db.commit()
     await db.refresh(sq)
     return sq
+
+@router.get("/projects/{project_id}/suggestions/{suggestion_id}/matches")
+async def get_suggestion_matches(
+    project_id: UUID,
+    suggestion_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    await _get_project(project_id, user, db)
+    res = await db.execute(select(SuggestedQuantity).where(SuggestedQuantity.id == suggestion_id))
+    sq = res.scalar_one_or_none()
+    if not sq: raise HTTPException(404, "Suggestion not found")
+
+    rates_res = await db.execute(select(RateItem))
+    all_rates = rates_res.scalars().all()
+
+    return RateMatchingService.find_best_matches(
+        element_category=sq.element_category,
+        element_description=sq.description,
+        element_unit=sq.quantity_unit,
+        rate_items=all_rates,
+        top_n=3
+    )
 
 @router.get("/projects/{project_id}/federated-quantities", response_model=list[FederatedQuantityOut])
 async def list_federated_quantities(project_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
