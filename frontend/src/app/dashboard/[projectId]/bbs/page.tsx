@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { useProjectStore } from "@/store/projectStore";
 import { api } from "@/lib/api";
@@ -8,7 +8,7 @@ import { calcCuttingLength, calcWeight, calcLapLength } from "@/lib/calculations
 import { Plus, Trash2, FileSpreadsheet, ChevronDown, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const DIAMETERS = [6, 8, 10, 12, 16, 20, 25, 32];
+const DIAMETERS = [6, 8, 10, 12, 14, 16, 20, 24, 25, 32];
 const SHAPES: BarShape[] = ["STRAIGHT", "L_SHAPE", "HOOK", "U_SHAPE", "SPIRAL"];
 const SECTIONS: Section[] = ["SUBSTRUCTURE", "SUPERSTRUCTURE"];
 
@@ -18,8 +18,9 @@ const SHAPE_ICON: Record<string, string> = {
 
 const EMPTY: BBSBarCreate = {
   member_name: "", bar_diameter_mm: 16, bar_shape: "STRAIGHT",
-  quantity: 1, clear_length_m: 1.0, hook_length_mm: 0,
-  cover_top_mm: 50, cover_bottom_mm: 50, section: "SUBSTRUCTURE", standard: "EBCS_3",
+  quantity: 1, clear_length_m: 1.0, cutting_length_m: null,
+  hook_length_mm: 0, cover_top_mm: 50, cover_bottom_mm: 50,
+  section: "SUBSTRUCTURE", standard: "EBCS_3",
 };
 
 export default function BBSPage() {
@@ -32,6 +33,9 @@ export default function BBSPage() {
   const [showCutting, setShowCutting] = useState(false);
   const [pushingToBoq, setPushingToBoq] = useState(false);
   const [pushResult, setPushResult] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => { fetchProject(projectId); }, [projectId, fetchProject]);
 
@@ -45,7 +49,10 @@ export default function BBSPage() {
   }
   useEffect(() => { load(); }, [projectId]);
 
-  const previewCutting = calcCuttingLength(form.bar_shape, form.clear_length_m, form.bar_diameter_mm, form.hook_length_mm, Math.max(form.cover_top_mm ?? 50, form.cover_bottom_mm ?? 50));
+  const useDirectCutting = form.cutting_length_m != null && form.cutting_length_m > 0;
+  const previewCutting = useDirectCutting
+    ? form.cutting_length_m!
+    : calcCuttingLength(form.bar_shape, form.clear_length_m, form.bar_diameter_mm, form.hook_length_mm, Math.max(form.cover_top_mm ?? 50, form.cover_bottom_mm ?? 50));
   const previewWeight  = calcWeight(form.bar_diameter_mm, previewCutting);
   const previewLap     = calcLapLength(form.bar_diameter_mm, form.standard);
 
@@ -83,6 +90,24 @@ export default function BBSPage() {
       setPushResult("Failed to sync to suggestions");
     } finally {
       setPushingToBoq(false);
+    }
+  }
+
+  async function importCSV(file: File) {
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await api.post(`/projects/${projectId}/bbs/import-csv`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setImportResult(`✓ Imported ${data.count} bars from CSV (${data.sections.join(", ")})`);
+      await load();
+    } catch (err: any) {
+      setImportResult(`✗ ${err.response?.data?.detail || "Import failed"}`);
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -157,6 +182,19 @@ export default function BBSPage() {
                   </div>
                 </div>
                 <div>
+                  <label className="block text-label-caps text-on-surface-variant mb-1">Cutting Length (direct)</label>
+                  <div className="relative">
+                    <input type="number" step="0.001" min={0} className="input pr-8" placeholder="Auto"
+                      value={form.cutting_length_m ?? ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        upd("cutting_length_m", val === "" ? null : parseFloat(val));
+                      }} />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-label-caps text-on-surface-variant pointer-events-none">m</span>
+                  </div>
+                  <p className="text-xs text-on-surface-variant mt-1">Leave empty to auto-calculate from shape.</p>
+                </div>
+                <div>
                   <label className="block text-label-caps text-on-surface-variant mb-1">Hook Length</label>
                   <div className="relative">
                     <input type="number" min={0} className="input pr-10" value={form.hook_length_mm}
@@ -180,7 +218,9 @@ export default function BBSPage() {
                 {/* Live preview */}
                 <div className="col-span-2 md:col-span-4 bg-primary/5 border border-primary/10 rounded-lg p-3 grid grid-cols-3 gap-4 text-sm">
                   <div>
-                    <span className="text-on-surface-variant text-xs">Cutting Length</span>
+                    <span className="text-on-surface-variant text-xs">
+                      Cutting Length {useDirectCutting && <span className="text-accent font-semibold">(direct)</span>}
+                    </span>
                     <p className="font-bold text-on-surface">{previewCutting.toFixed(3)} m</p>
                   </div>
                   <div>
@@ -194,6 +234,25 @@ export default function BBSPage() {
                 </div>
 
                 <div className="col-span-2 md:col-span-4 flex justify-end gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.txt"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) importCSV(f);
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={importing}
+                    className="btn-secondary flex items-center gap-2 disabled:opacity-40"
+                  >
+                    <FileSpreadsheet size={14} /> {importing ? "Importing…" : "Import CSV"}
+                  </button>
                   <button onClick={exportExcel} type="button" className="btn-secondary flex items-center gap-2">
                     <FileSpreadsheet size={14} /> Export Excel
                   </button>
@@ -209,11 +268,18 @@ export default function BBSPage() {
                     <Plus size={15} /> Add Bar
                   </button>
                 </div>
-                {pushResult && (
+                {(pushResult || importResult) && (
                   <div className="col-span-2 md:col-span-4">
-                    <p className={`text-sm px-3 py-2 rounded-lg ${pushResult.startsWith("✓") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-                      {pushResult}
-                    </p>
+                    {pushResult && (
+                      <p className={`text-sm px-3 py-2 rounded-lg ${pushResult.startsWith("✓") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                        {pushResult}
+                      </p>
+                    )}
+                    {importResult && (
+                      <p className={`text-sm px-3 py-2 rounded-lg mt-1 ${importResult.startsWith("✓") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                        {importResult}
+                      </p>
+                    )}
                   </div>
                 )}
               </form>

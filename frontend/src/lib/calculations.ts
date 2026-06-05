@@ -4,7 +4,7 @@
 
 const UNIT_WEIGHTS: Record<number, number> = {
   6: 0.222, 8: 0.395, 10: 0.617, 12: 0.888,
-  16: 1.578, 20: 2.466, 25: 3.853, 32: 6.313,
+  14: 1.21, 16: 1.58, 20: 2.47, 24: 3.55, 25: 3.85, 32: 6.31,
 };
 
 export function calcCuttingLength(

@@ -60,19 +60,23 @@ class BBSCalculator:
     def enrich_bar(cls, bar: dict, standard: str = "EBCS_3") -> dict:
         """
         Given a bar dict with raw inputs, compute and attach:
-        - cutting_length_m
+        - cutting_length_m (uses direct value if provided, else computed from clear_length)
         - weight_per_unit_kg
         - total_weight_kg
         - lap_length_mm
         """
-        cover = max(bar.get("cover_top_mm", 50), bar.get("cover_bottom_mm", 50))
-        cutting_length = cls.calculate_cutting_length(
-            bar_shape=bar["bar_shape"],
-            clear_length_m=float(bar["clear_length_m"]),
-            diameter_mm=bar["bar_diameter_mm"],
-            hook_length_mm=bar.get("hook_length_mm", 0),
-            cover_deduction_mm=cover,
-        )
+        # Prefer direct cutting length input (Ethiopian QS standard practice)
+        if bar.get("cutting_length_m") is not None:
+            cutting_length = float(bar["cutting_length_m"])
+        else:
+            cover = max(bar.get("cover_top_mm", 50), bar.get("cover_bottom_mm", 50))
+            cutting_length = cls.calculate_cutting_length(
+                bar_shape=bar["bar_shape"],
+                clear_length_m=float(bar["clear_length_m"]),
+                diameter_mm=bar["bar_diameter_mm"],
+                hook_length_mm=bar.get("hook_length_mm", 0),
+                cover_deduction_mm=cover,
+            )
         weight_per_unit = cls.calculate_weight(bar["bar_diameter_mm"], cutting_length)
         lap_length = cls.calculate_lap_length(bar["bar_diameter_mm"], standard)
 

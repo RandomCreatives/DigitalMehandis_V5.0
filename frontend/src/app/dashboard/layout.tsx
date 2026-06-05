@@ -20,15 +20,15 @@ const TOP_NAV = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const pathname = usePathname();
-  const { accessToken, logout } = useAuthStore();
+  const { user, logout, checkAuth } = useAuthStore();
 
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const timerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const warnRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countRef   = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const doLogout = useCallback(() => {
-    logout();
+  const doLogout = useCallback(async () => {
+    await logout();
     router.push("/auth/login");
   }, [logout, router]);
 
@@ -54,15 +54,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }, IDLE_TIMEOUT_MS - WARN_BEFORE_MS);
 
     // Auto-logout after full timeout
-    timerRef.current = setTimeout(doLogout, IDLE_TIMEOUT_MS);
+    timerRef.current = setTimeout(() => {
+      doLogout();
+    }, IDLE_TIMEOUT_MS);
   }, [doLogout]);
 
-  // Attach activity listeners
+  // Attach activity listeners + check auth on mount
   useEffect(() => {
-    if (!accessToken && !localStorage.getItem("access_token")) {
-      router.push("/auth/login");
-      return;
-    }
+    checkAuth().then(() => {
+      const userFromStore = useAuthStore.getState().user;
+      if (!userFromStore) {
+        router.push("/auth/login");
+      }
+    });
+
     const events = ["mousemove", "keydown", "mousedown", "touchstart", "scroll"];
     events.forEach((e) => window.addEventListener(e, resetTimer, { passive: true }));
     resetTimer();
@@ -72,7 +77,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (warnRef.current)   clearTimeout(warnRef.current);
       if (countRef.current)  clearInterval(countRef.current);
     };
-  }, [accessToken, resetTimer, router]);
+  }, [resetTimer, checkAuth, router]);
 
   function handleLogout() {
     doLogout();

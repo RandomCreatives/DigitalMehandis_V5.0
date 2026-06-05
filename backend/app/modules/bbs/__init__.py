@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.db.session import get_db
@@ -7,6 +7,7 @@ from app.db.models import BBSBar, Project, User, SuggestedQuantity
 from app.schemas.bbs import BBSBarCreate, BBSBarUpdate, BBSBarOut, CuttingListItem
 from app.dependencies import get_current_user
 from app.utils.bbs_calculator import BBSCalculator
+from app.utils.bbs_csv_parser import parse_bbs_csv
 
 router = APIRouter(prefix="/projects/{project_id}/bbs", tags=["bbs"])
 
@@ -25,6 +26,7 @@ def _enrich(bar: BBSBar, standard: str = "EBCS_3") -> dict:
     raw = {
         "bar_shape": bar.bar_shape,
         "clear_length_m": float(bar.clear_length_m),
+        "cutting_length_m": float(bar.cutting_length_m) if bar.cutting_length_m is not None else None,
         "bar_diameter_mm": bar.bar_diameter_mm,
         "hook_length_mm": bar.hook_length_mm or 0,
         "cover_top_mm": bar.cover_top_mm or 50,
@@ -41,11 +43,11 @@ def _enrich(bar: BBSBar, standard: str = "EBCS_3") -> dict:
         "bar_shape": bar.bar_shape,
         "quantity": bar.quantity,
         "clear_length_m": float(bar.clear_length_m),
+        "cutting_length_m": enriched["cutting_length_m"],
         "hook_length_mm": bar.hook_length_mm,
         "cover_top_mm": bar.cover_top_mm,
         "cover_bottom_mm": bar.cover_bottom_mm,
         "lap_length_mm": enriched["lap_length_mm"],
-        "cutting_length_m": enriched["cutting_length_m"],
         "weight_per_unit_kg": enriched["weight_per_unit_kg"],
         "total_weight_kg": enriched["total_weight_kg"],
         "section": bar.section,
@@ -80,6 +82,7 @@ async def add_bar(project_id: UUID, payload: BBSBarCreate, user: User = Depends(
         bar_shape=payload.bar_shape,
         quantity=payload.quantity,
         clear_length_m=payload.clear_length_m,
+        cutting_length_m=payload.cutting_length_m,
         hook_length_mm=payload.hook_length_mm,
         bend_deduction_mm=payload.bend_deduction_mm,
         cover_top_mm=payload.cover_top_mm,
@@ -169,6 +172,7 @@ async def sync_to_boq(
         raw = {
             "bar_shape": bar.bar_shape,
             "clear_length_m": float(bar.clear_length_m),
+            "cutting_length_m": float(bar.cutting_length_m) if bar.cutting_length_m is not None else None,
             "bar_diameter_mm": bar.bar_diameter_mm,
             "hook_length_mm": bar.hook_length_mm or 0,
             "cover_top_mm": bar.cover_top_mm or 50,
@@ -205,4 +209,69 @@ async def sync_to_boq(
         "message": f"Synced {created_count} reinforcement totals to suggestions",
         "count": created_count,
         "section": section
+    }
+
+
+@router.post("/import-csv", status_code=status.HTTP_201_CREATED)
+async def import_bbs_csv(
+    project_id: UUID,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Import a BBS CSV file in the Ethiopian QS format (e.g., exported from Excel).
+    Uses the cutting_length_m directly from the CSV (Ethiopian standard practice).
+    """
+    await _check_project(project_id, user, db)
+
+    if not file.filename or not file.filename.lower().endswith((".csv", ".txt")):
+        raise HTTPException(status_code=400, detail="Only CSV or TXT files are accepted")
+
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 5MB)")
+
+    try:
+        parsed_rows = list(parse_bbs_csv(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"CSV parse error: {str(e)}")
+
+    if not parsed_rows:
+        raise HTTPException(status_code=400, detail="No valid data rows found in CSV")
+
+    # Get current bar count for auto-mark
+    count_result = await db.execute(select(BBSBar).where(BBSBar.project_id == project_id))
+    existing_count = len(count_result.scalars().all())
+
+    created = 0
+    for idx, row in enumerate(parsed_rows, start=existing_count + 1):
+        lap = BBSCalculator.calculate_lap_length(row.bar_diameter_mm, "EBCS_3")
+        bar = BBSBar(
+            project_id=project_id,
+            bar_mark=f"B{idx}",
+            member_name=row.member_name,
+            bar_diameter_mm=row.bar_diameter_mm,
+            bar_shape=row.bar_shape,
+            quantity=row.quantity,
+            clear_length_m=row.clear_length_m,
+            cutting_length_m=row.cutting_length_m,
+            hook_length_mm=0,
+            bend_deduction_mm=0,
+            cover_top_mm=50,
+            cover_bottom_mm=50,
+            lap_length_mm=lap,
+            section=row.section,
+            notes=row.notes,
+        )
+        db.add(bar)
+        created += 1
+
+    await db.commit()
+
+    return {
+        "message": f"Imported {created} bar records from CSV",
+        "count": created,
+        "sections": list({r.section for r in parsed_rows}),
+        "diameters": list({r.bar_diameter_mm for r in parsed_rows}),
     }
