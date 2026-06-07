@@ -1,177 +1,184 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useProjectStore } from "@/store/projectStore";
 import { api } from "@/lib/api";
-import { CheckCircle, XCircle, Edit2, RefreshCw } from "lucide-react";
+import {
+  CheckCircle2, XCircle, Edit3,
+  Layers, Package, Info,
+  CheckSquare, Square
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Status = "PENDING" | "APPROVED" | "REJECTED" | "EDITED";
-
 interface Suggestion {
-  id: string; discipline: string; element_category: string; description: string;
-  quantity_value: number; quantity_unit: string; section: string;
-  source_layer: string | null; confidence: number; notes: string | null; status: Status;
+  id: string;
+  discipline: string;
+  task_label: string;
+  source_layer?: string;
+  source_block?: string;
+  entity_count: number;
+  raw_value: number;
+  final_value: number;
+  unit: string;
+  confidence: number;
+  status: string;
 }
-
-const DISC_CHIP: Record<string, string> = {
-  ARCHITECTURAL: "bg-blue-100 text-blue-800",
-  STRUCTURAL:    "bg-orange-100 text-orange-800",
-  ELECTRICAL:    "bg-yellow-100 text-yellow-800",
-  SANITARY:      "bg-green-100 text-green-800",
-};
 
 export default function SuggestionsPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { current, fetchProject } = useProjectStore();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [filter, setFilter]           = useState<Status>("PENDING");
-  const [loading, setLoading]         = useState(false);
-  const [editId, setEditId]           = useState<string | null>(null);
-  const [editValue, setEditValue]     = useState(0);
-  const [editDesc, setEditDesc]       = useState("");
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  useEffect(() => { fetchProject(projectId); }, [projectId, fetchProject]);
-
-  async function load(status: Status = filter) {
+  async function load() {
     setLoading(true);
-    const { data } = await api.get(`/projects/${projectId}/suggestions?status=${status}`);
-    setSuggestions(data);
-    setLoading(false);
-  }
-  useEffect(() => { load(); }, [projectId, filter]);
-
-  async function review(id: string, status: "APPROVED" | "REJECTED" | "EDITED", overrides?: object) {
-    await api.post(`/projects/${projectId}/suggestions/${id}/review`, { status, ...overrides });
-    setSuggestions((prev) => prev.filter((s) => s.id !== id));
-    setEditId(null);
-  }
-
-  async function approveAll() {
-    for (const s of suggestions) {
-      await api.post(`/projects/${projectId}/suggestions/${s.id}/review`, { status: "APPROVED" });
+    try {
+      const { data } = await api.get(`/projects/${projectId}/suggestions?status=PENDING`);
+      setSuggestions(data);
+    } finally {
+      setLoading(false);
     }
-    setSuggestions([]);
+  }
+
+  useEffect(() => { load(); }, [projectId]);
+
+  async function handleReview(id: string, status: 'APPROVED' | 'REJECTED') {
+    await api.post(`/projects/${projectId}/suggestions/${id}/review`, { status });
+    setSuggestions(s => s.filter(x => x.id !== id));
+    setSelected(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+    });
+  }
+
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selected.size === suggestions.length) setSelected(new Set());
+    else setSelected(new Set(suggestions.map(s => s.id)));
+  }
+
+  async function bulkApprove() {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    if (!confirm(`Approve ${ids.length} items?`)) return;
+
+    for (const id of ids) {
+      await api.post(`/projects/${projectId}/suggestions/${id}/review`, { status: 'APPROVED' });
+    }
+    load();
+    setSelected(new Set());
   }
 
   return (
-    <div className="p-6 space-y-5 max-w-5xl mx-auto w-full">
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h2 className="text-title-sm text-on-surface">Suggested Quantities</h2>
-            <p className="text-sm text-on-surface-variant mt-1">
-              Auto-extracted from uploaded drawings. Review each suggestion before it enters the BOQ.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {(["PENDING", "APPROVED", "REJECTED"] as Status[]).map((s) => (
-              <button key={s} onClick={() => setFilter(s)}
-                className={cn("section-tab", filter === s ? "active" : "inactive")}>
-                {s.charAt(0) + s.slice(1).toLowerCase()}
-              </button>
-            ))}
-          </div>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-title-sm text-on-surface">Auto-Extracted Suggestions</h2>
+          <p className="text-sm text-on-surface-variant">Review and approve quantities detected from CAD drawings.</p>
         </div>
-
-        {filter === "PENDING" && suggestions.length > 0 && (
-          <div className="flex items-center justify-between bg-secondary-container border border-secondary/20 rounded-xl px-4 py-3">
-            <p className="text-sm text-on-surface">
-              <strong>{suggestions.length}</strong> pending suggestion{suggestions.length !== 1 ? "s" : ""} — review individually or approve all.
-            </p>
-            <button onClick={approveAll} className="btn-primary text-sm flex items-center gap-1.5">
-              <CheckCircle size={14} /> Approve All
+        <div className="flex items-center gap-2">
+          {selected.size > 0 && (
+            <button onClick={bulkApprove} className="btn-primary py-2">
+              Approve Selected ({selected.size})
             </button>
-          </div>
-        )}
-
-        {loading ? (
-          <div className="text-center py-16 text-on-surface-variant">
-            <RefreshCw size={24} className="mx-auto animate-spin mb-2" /> Loading…
-          </div>
-        ) : suggestions.length === 0 ? (
-          <div className="card text-center py-16 text-on-surface-variant">
-            {filter === "PENDING"
-              ? "No pending suggestions. Upload a drawing to generate suggestions."
-              : `No ${filter.toLowerCase()} suggestions.`}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {suggestions.map((s) => (
-              <div key={s.id} className="card">
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div className="flex-1 min-w-0 space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={cn("chip text-xs", DISC_CHIP[s.discipline] ?? "bg-surface-highest text-on-surface-variant")}>
-                        {s.discipline}
-                      </span>
-                      <span className="chip chip-draft">{s.element_category}</span>
-                      <span className="chip chip-draft">{s.section}</span>
-                      <span className={cn("text-xs font-semibold",
-                        s.confidence >= 0.85 ? "text-green-600" : s.confidence >= 0.7 ? "text-yellow-600" : "text-error")}>
-                        {s.confidence >= 0.85 ? "High" : s.confidence >= 0.7 ? "Medium" : "Low"} confidence ({Math.round(s.confidence * 100)}%)
-                      </span>
-                    </div>
-                    <p className="font-medium text-on-surface">{s.description}</p>
-                    {s.source_layer && <p className="text-xs text-on-surface-variant">Layer: {s.source_layer}</p>}
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    {editId === s.id ? (
-                      <div className="flex items-center gap-2">
-                        <input type="number" step="0.001" className="input w-24 py-1 text-sm text-right"
-                          value={editValue} onChange={(e) => setEditValue(parseFloat(e.target.value))} />
-                        <span className="text-sm text-on-surface-variant">{s.quantity_unit}</span>
-                      </div>
-                    ) : (
-                      <div className="text-right">
-                        <span className="text-xl font-bold text-primary">{Number(s.quantity_value).toFixed(3)}</span>
-                        <span className="text-sm text-on-surface-variant ml-1">{s.quantity_unit}</span>
-                      </div>
-                    )}
-
-                    {filter === "PENDING" && (
-                      <div className="flex items-center gap-1">
-                        {editId === s.id ? (
-                          <>
-                            <button onClick={() => review(s.id, "EDITED", { quantity_value: editValue, description: editDesc || s.description })}
-                              className="text-green-600 hover:text-green-700 p-1.5" title="Save">
-                              <CheckCircle size={18} />
-                            </button>
-                            <button onClick={() => setEditId(null)} className="text-outline hover:text-on-surface p-1.5" title="Cancel">
-                              <XCircle size={18} />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => review(s.id, "APPROVED")}
-                              className="text-green-600 hover:text-green-700 p-1.5" title="Approve">
-                              <CheckCircle size={18} />
-                            </button>
-                            <button onClick={() => { setEditId(s.id); setEditValue(s.quantity_value); setEditDesc(s.description); }}
-                              className="text-primary hover:text-accent p-1.5" title="Edit">
-                              <Edit2 size={16} />
-                            </button>
-                            <button onClick={() => review(s.id, "REJECTED")}
-                              className="text-error hover:text-red-700 p-1.5" title="Reject">
-                              <XCircle size={18} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {editId === s.id && (
-                  <div className="mt-3">
-                    <input className="input text-sm" value={editDesc}
-                      onChange={(e) => setEditDesc(e.target.value)} placeholder="Edit description…" />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+          )}
+          <button onClick={load} className="btn-ghost text-xs">Refresh</button>
+        </div>
       </div>
+
+      {loading ? (
+        <div className="animate-pulse space-y-4">
+          {[1,2,3].map(i => <div key={i} className="h-20 bg-surface-low rounded-xl" />)}
+        </div>
+      ) : suggestions.length === 0 ? (
+        <div className="card p-12 text-center space-y-3 border-dashed">
+          <Package size={40} className="mx-auto text-outline" />
+          <p className="text-on-surface font-medium">No pending suggestions</p>
+          <p className="text-sm text-on-surface-variant">Upload a DXF drawing to see automated quantities here.</p>
+        </div>
+      ) : (
+        <div className="panel overflow-hidden">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th className="w-10">
+                  <button onClick={toggleAll}>
+                    {selected.size === suggestions.length ? <CheckSquare size={16} className="text-accent" /> : <Square size={16} />}
+                  </button>
+                </th>
+                <th>Element / Task</th>
+                <th>Source</th>
+                <th className="num">Raw Qty</th>
+                <th className="num">Final Qty</th>
+                <th>Confidence</th>
+                <th className="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {suggestions.map((s) => (
+                <tr key={s.id} className={cn(selected.has(s.id) && "bg-orange-50/50")}>
+                  <td>
+                    <button onClick={() => toggleSelect(s.id)}>
+                      {selected.has(s.id) ? <CheckSquare size={16} className="text-accent" /> : <Square size={16} />}
+                    </button>
+                  </td>
+                  <td>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-on-surface flex items-center gap-1.5">
+                        <span className={cn(
+                          "w-2 h-2 rounded-full",
+                          s.discipline === 'ARCHITECTURAL' ? 'bg-blue-400' :
+                          s.discipline === 'STRUCTURAL' ? 'bg-red-400' : 'bg-green-400'
+                        )} />
+                        {s.task_label}
+                      </span>
+                      <span className="text-[10px] text-on-surface-variant uppercase tracking-wider">{s.discipline}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="flex flex-col">
+                      <span className="text-sm text-on-surface">{s.source_layer || s.source_block}</span>
+                      <span className="text-xs text-on-surface-variant">{s.entity_count} entities</span>
+                    </div>
+                  </td>
+                  <td className="num font-mono">{s.raw_value.toFixed(2)}</td>
+                  <td className="num font-mono font-bold text-accent">{s.final_value.toFixed(2)} {s.unit}</td>
+                  <td>
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                      s.confidence > 0.8 ? "bg-green-100 text-green-700" :
+                      s.confidence > 0.5 ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700"
+                    )}>
+                      {(s.confidence * 100).toFixed(0)}%
+                    </span>
+                  </td>
+                  <td>
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => handleReview(s.id, 'APPROVED')} className="btn-ghost p-1.5 text-green-600 hover:bg-green-50">
+                        <CheckCircle2 size={18} />
+                      </button>
+                      <button onClick={() => handleReview(s.id, 'REJECTED')} className="btn-ghost p-1.5 text-error hover:bg-red-50">
+                        <XCircle size={18} />
+                      </button>
+                      <button className="btn-ghost p-1.5 text-on-surface-variant">
+                        <Edit3 size={18} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
