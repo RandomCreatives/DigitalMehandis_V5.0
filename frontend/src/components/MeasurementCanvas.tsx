@@ -10,6 +10,7 @@ import * as fabricModule from "fabric";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fabric = (fabricModule as any).fabric as typeof import("fabric")["fabric"];
 import * as pdfjsLib from "pdfjs-dist";
+import { api as axiosApi } from "@/lib/api";
 import {
   MousePointer2,
   Ruler,
@@ -265,6 +266,37 @@ export default function MeasurementCanvas({
   }, [projectId]);
 
   // ── Render PDF ──────────────────────────────────────────────────────────────
+  const renderDxf = useCallback(async () => {
+    if (!pdfCanvasRef.current) return;
+    try {
+      const { data } = await api.get(`/projects/${projectId}/drawings/${drawingId}/canvas-data`);
+      const canvas = pdfCanvasRef.current;
+      const ctx = canvas.getContext("2d")!;
+
+      const vb = data.viewbox;
+      const width = vb.max_x - vb.min_x;
+      const height = vb.max_y - vb.min_y;
+      const scale = 1000 / Math.max(width, height);
+
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+      ctx.strokeStyle = "#333";
+      ctx.lineWidth = 1;
+
+      for (const layer in data.layers) {
+        for (const line of data.layers[layer].lines) {
+          ctx.beginPath();
+          ctx.moveTo((line.x1 - vb.min_x) * scale, (vb.max_y - line.y1) * scale);
+          ctx.lineTo((line.x2 - vb.min_x) * scale, (vb.max_y - line.y2) * scale);
+          ctx.stroke();
+        }
+      }
+      setPdfDims({ width: canvas.width, height: canvas.height });
+      return { width: canvas.width, height: canvas.height };
+    } catch (err) {
+      console.error("DXF render error", err);
+    }
+  }, [projectId, drawingId]);
   const renderPdf = useCallback(async () => {
     if (!pdfCanvasRef.current) return;
     try {
@@ -289,7 +321,7 @@ export default function MeasurementCanvas({
     let fc: fabric.Canvas | null = null;
 
     async function init() {
-      const dims = await renderPdf();
+      const dims = drawingName.toLowerCase().endsWith(".dxf") ? await renderDxf() : await renderPdf();
       if (!dims || !fabricCanvasRef.current) return;
 
       fc = new fabric.Canvas(fabricCanvasRef.current, {

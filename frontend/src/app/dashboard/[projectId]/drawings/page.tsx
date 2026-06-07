@@ -129,11 +129,11 @@ export default function DrawingsPage() {
               <p className="text-on-surface font-medium">
                 {isDragActive ? "Drop files here" : "Drag & drop PDF/DXF files, or click to browse"}
               </p>
-              <p className="text-on-surface-variant text-sm mt-1">Max 100MB per file · PDF, DXF supported</p>
+              <p className="text-on-surface-variant text-sm mt-1">Max 100MB per file · PDF, DXF supported (Beta)</p>
             </div>
             {uploading && (
               <p className="text-sm text-accent animate-pulse flex items-center gap-2">
-                <Upload size={14} /> Uploading and processing…
+                <Upload size={14} /> Uploading and processing (Beta)…
               </p>
             )}
           </div>

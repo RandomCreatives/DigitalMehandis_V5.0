@@ -1,24 +1,30 @@
 """
-Drawings API — updated to use ExtractionService for unified PDF/DXF processing.
-Includes Review and Federated Quantity endpoints.
+Drawings API — updated for Phase 3 CAD automation.
 """
 from uuid import UUID
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from typing import Dict, List
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.db.session import get_db
-from app.db.models import Drawing, Project, User, SuggestedQuantity, FederatedQuantity
-from app.schemas.drawing import DrawingOut, DrawingUpdate
-from app.schemas.federation import SuggestedQuantityOut, SuggestedQuantityReview, FederatedQuantityOut
+from app.db.session import get_db, AsyncSessionLocal
+from app.db.models import Drawing, Project, User, BOQItem
+from app.db.models_phase3 import (
+    DXFLayer, DXFBlock, DXFAnalysisJob, LayerMapping, BlockMapping,
+    QuantitySuggestion, DXFEntity, LayerMappingTemplate, DrawingRevision
+)
+from app.schemas.drawing import (
+    DrawingOut, DXFLayerOut, DXFBlockOut, DXFLayerUpdate,
+    DXFBlockUpdate, ConversionRequest, QuantitySuggestionOut, QuantitySuggestionReview
+)
 from app.dependencies import get_current_user
 from app.utils.file_handler import save_upload, delete_file
 from app.services.extraction_service import ExtractionService
-from app.core.config import get_settings
+from app.services.conversion_service import ConversionService
+from app.services.bbs_extraction_service import BBSExtractionService
+from app.services.revision_service import RevisionService
 
-settings = get_settings()
 router = APIRouter(tags=["drawings"])
 
 async def _get_project(project_id: UUID, user: User, db: AsyncSession) -> Project:
@@ -35,31 +41,24 @@ async def _get_drawing(drawing_id: UUID, project_id: UUID, db: AsyncSession) -> 
         raise HTTPException(status_code=404, detail="Drawing not found")
     return drawing
 
-async def _save_suggestions(db: AsyncSession, project_id: UUID, drawing_id: UUID, suggestions: list) -> int:
-    count = 0
-    for s in suggestions:
-        sq = SuggestedQuantity(
-            project_id=project_id,
-            drawing_id=drawing_id,
-            discipline=s.discipline,
-            element_category=s.element_category,
-            description=s.description,
-            quantity_value=s.value,
-            quantity_unit=s.unit,
-            section=s.section,
-            source_layer=s.source_layer,
-            confidence=s.confidence,
-            notes=f"{s.notes} (MoUDC: {s.moudc_code})",
-            status="PENDING",
-        )
-        db.add(sq)
-        count += 1
-    await db.commit()
-    return count
+async def process_drawing_task(project_id: UUID, drawing_id: UUID, file_path: str, discipline: str, is_dxf: bool):
+    async with AsyncSessionLocal() as db:
+        try:
+            await ExtractionService.extract_from_drawing(
+                project_id=project_id,
+                drawing_id=drawing_id,
+                file_path=file_path,
+                discipline=discipline,
+                is_dxf=is_dxf,
+                db=db
+            )
+        except Exception as e:
+            print(f"Background task failed: {e}")
 
 @router.post("/projects/{project_id}/drawings/upload", status_code=status.HTTP_201_CREATED)
 async def upload_drawing(
     project_id: UUID,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     category: str = Query(default="ARCHITECTURAL"),
     discipline: str = Query(default="ARCHITECTURAL"),
@@ -77,82 +76,220 @@ async def upload_drawing(
         file_path=meta["file_path"],
         file_size_mb=meta["file_size_mb"],
         category=category.upper(),
-        page_count=meta["page_count"],
+        page_count=meta.get("page_count", 1),
     )
     db.add(drawing)
-    await db.flush()
-
-    result = await ExtractionService.extract_from_drawing(
-        project_id=project_id,
-        drawing_id=drawing.id,
-        file_path=meta["file_path"],
-        discipline=discipline,
-        is_dxf=is_dxf
-    )
-
-    suggestion_count = await _save_suggestions(db, project_id, drawing.id, result["suggestions"])
     await db.commit()
     await db.refresh(drawing)
 
+    background_tasks.add_task(
+        process_drawing_task,
+        project_id,
+        drawing.id,
+        meta["file_path"],
+        discipline,
+        is_dxf
+    )
+
     return {
         "drawing": DrawingOut.model_validate(drawing),
-        "canvas_json": result["canvas_json"],
-        "suggestions_generated": suggestion_count,
-        "message": f"Drawing processed successfully. {suggestion_count} suggestions generated.",
+        "is_dxf": is_dxf,
+        "message": "Drawing uploaded and analysis started in background (Beta).",
     }
 
 @router.get("/projects/{project_id}/drawings", response_model=list[DrawingOut])
 async def list_drawings(project_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await _get_project(project_id, user, db)
-    result = await db.execute(select(Drawing).where(Drawing.project_id == project_id))
+    result = await db.execute(select(Drawing).where(Drawing.project_id == project_id).order_by(Drawing.uploaded_at.desc()))
     return result.scalars().all()
 
-@router.get("/projects/{project_id}/drawings/{drawing_id}", response_model=DrawingOut)
-async def get_drawing(project_id: UUID, drawing_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@router.get("/projects/{project_id}/drawings/{drawing_id}/layers", response_model=list[DXFLayerOut])
+async def get_drawing_layers(project_id: UUID, drawing_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await _get_project(project_id, user, db)
-    return await _get_drawing(drawing_id, project_id, db)
-
-@router.get("/projects/{project_id}/suggestions", response_model=list[SuggestedQuantityOut])
-async def list_suggestions(project_id: UUID, status_filter: str = Query(default="PENDING", alias="status"), user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    await _get_project(project_id, user, db)
-    stmt = select(SuggestedQuantity).where(SuggestedQuantity.project_id == project_id, SuggestedQuantity.status == status_filter.upper())
-    result = await db.execute(stmt)
+    result = await db.execute(select(DXFLayer).where(DXFLayer.drawing_id == drawing_id).order_by(DXFLayer.layer_name))
     return result.scalars().all()
 
-@router.post("/projects/{project_id}/suggestions/{suggestion_id}/review", response_model=SuggestedQuantityOut)
-async def review_suggestion(project_id: UUID, suggestion_id: UUID, payload: SuggestedQuantityReview, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@router.patch("/projects/{project_id}/drawings/{drawing_id}/layers/{layer_id}", response_model=DXFLayerOut)
+async def update_layer_mapping(project_id: UUID, drawing_id: UUID, layer_id: UUID, payload: DXFLayerUpdate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await _get_project(project_id, user, db)
-    result = await db.execute(select(SuggestedQuantity).where(SuggestedQuantity.id == suggestion_id, SuggestedQuantity.project_id == project_id))
+    result = await db.execute(select(DXFLayer).where(DXFLayer.id == layer_id, DXFLayer.drawing_id == drawing_id))
+    layer = result.scalar_one_or_none()
+    if not layer: raise HTTPException(404, "Layer not found")
+
+    if payload.user_override is not None:
+        layer.user_override = payload.user_override
+        map_res = await db.execute(select(LayerMapping).where(LayerMapping.project_id == project_id, LayerMapping.layer_name == layer.layer_name))
+        m = map_res.scalar_one_or_none()
+        if not m:
+            m = LayerMapping(project_id=project_id, layer_name=layer.layer_name, discipline="AR", task_key=payload.user_override, mapped_by="user")
+            db.add(m)
+        else:
+            m.task_key = payload.user_override
+            m.mapped_by = "user"
+
+    if payload.is_ignored is not None: layer.is_ignored = payload.is_ignored
+
+    await db.commit()
+    await db.refresh(layer)
+    return layer
+
+@router.get("/projects/{project_id}/drawings/{drawing_id}/blocks", response_model=list[DXFBlockOut])
+async def get_drawing_blocks(project_id: UUID, drawing_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _get_project(project_id, user, db)
+    result = await db.execute(select(DXFBlock).where(DXFBlock.drawing_id == drawing_id).order_by(DXFBlock.block_name))
+    return result.scalars().all()
+
+@router.patch("/projects/{project_id}/drawings/{drawing_id}/blocks/{block_id}", response_model=DXFBlockOut)
+async def update_block_mapping(project_id: UUID, drawing_id: UUID, block_id: UUID, payload: DXFBlockUpdate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _get_project(project_id, user, db)
+    result = await db.execute(select(DXFBlock).where(DXFBlock.id == block_id, DXFBlock.drawing_id == drawing_id))
+    block = result.scalar_one_or_none()
+    if not block: raise HTTPException(404, "Block not found")
+
+    if payload.user_override is not None:
+        block.user_override = payload.user_override
+        map_res = await db.execute(select(BlockMapping).where(BlockMapping.project_id == project_id, BlockMapping.block_name == block.block_name))
+        m = map_res.scalar_one_or_none()
+        if not m:
+            m = BlockMapping(project_id=project_id, block_name=block.block_name, discipline="AR", task_key=payload.user_override, mapped_by="user")
+            db.add(m)
+        else:
+            m.task_key = payload.user_override
+            m.mapped_by = "user"
+
+    await db.commit()
+    await db.refresh(block)
+    return block
+
+@router.post("/projects/{project_id}/drawings/{drawing_id}/process")
+async def process_drawing_to_suggestions(
+    project_id: UUID,
+    drawing_id: UUID,
+    payload: ConversionRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    await _get_project(project_id, user, db)
+    multipliers = payload.model_dump()
+    count = await ConversionService.process_drawing_to_suggestions(project_id, drawing_id, db, multipliers)
+    return {"message": f"Successfully generated {count} suggestions.", "count": count}
+
+@router.post("/projects/{project_id}/drawings/{drawing_id}/extract-bbs")
+async def extract_bbs(
+    project_id: UUID,
+    drawing_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    await _get_project(project_id, user, db)
+    count = await BBSExtractionService.extract_bbs_from_drawing(drawing_id, project_id, db)
+    return {"message": f"Successfully extracted {count} BBS entries.", "count": count}
+
+@router.get("/projects/{project_id}/suggestions", response_model=list[QuantitySuggestionOut])
+async def list_suggestions(
+    project_id: UUID,
+    status: str = Query(default="PENDING"),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    await _get_project(project_id, user, db)
+    result = await db.execute(select(QuantitySuggestion).where(
+        QuantitySuggestion.project_id == project_id,
+        QuantitySuggestion.status == status.upper()
+    ))
+    return result.scalars().all()
+
+@router.post("/projects/{project_id}/suggestions/{suggestion_id}/review")
+async def review_suggestion(
+    project_id: UUID,
+    suggestion_id: UUID,
+    payload: QuantitySuggestionReview,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    await _get_project(project_id, user, db)
+    result = await db.execute(select(QuantitySuggestion).where(QuantitySuggestion.id == suggestion_id))
     sq = result.scalar_one_or_none()
     if not sq: raise HTTPException(404, "Suggestion not found")
 
     sq.status = payload.status.upper()
     sq.reviewed_at = datetime.now(timezone.utc)
-    if payload.quantity_value is not None: sq.quantity_value = payload.quantity_value
-    if payload.description is not None: sq.description = payload.description
+    sq.reviewed_by = user.id
+    if payload.final_quantity is not None: sq.final_quantity = payload.final_quantity
+    if payload.notes: sq.notes = payload.notes
 
     if sq.status in ("APPROVED", "EDITED"):
-        fq = FederatedQuantity(
-            project_id=project_id, drawing_id=sq.drawing_id, suggested_quantity_id=sq.id,
-            discipline=sq.discipline, element_category=sq.element_category, element_description=sq.description,
-            quantity_value=sq.quantity_value, quantity_unit=sq.quantity_unit, section=sq.section,
-            source_layer=sq.source_layer, is_verified=True, notes=sq.notes,
+        # Create actual BOQ item
+        final_qty = sq.final_quantity if sq.final_quantity is not None else sq.final_value
+        boq_item = BOQItem(
+            project_id=project_id,
+            item_no="AUTO", # Will be assigned by BOQ sequencer
+            section=sq.discipline,
+            description=f"{sq.task_label} (Auto from {sq.source_layer or sq.source_block})",
+            unit=sq.unit,
+            quantity=final_qty,
+            rate=0.0, # Will be filled if rate_id exists
+            amount=0.0
         )
-        db.add(fq)
-    await db.commit()
-    await db.refresh(sq)
-    return sq
+        db.add(boq_item)
 
-@router.get("/projects/{project_id}/federated-quantities", response_model=list[FederatedQuantityOut])
-async def list_federated_quantities(project_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await db.commit()
+    return {"message": f"Suggestion {sq.status.lower()} successfully."}
+
+@router.get("/projects/{project_id}/suggestions/{suggestion_id}/source")
+async def get_suggestion_source(
+    project_id: UUID,
+    suggestion_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     await _get_project(project_id, user, db)
-    result = await db.execute(select(FederatedQuantity).where(FederatedQuantity.project_id == project_id))
+    result = await db.execute(select(QuantitySuggestion).where(QuantitySuggestion.id == suggestion_id))
+    sq = result.scalar_one_or_none()
+    if not sq: raise HTTPException(404, "Suggestion not found")
+
+    handles = sq.entity_ids.get("handles", []) if sq.entity_ids else []
+    entities_res = await db.execute(select(DXFEntity).where(
+        DXFEntity.drawing_id == sq.drawing_id,
+        DXFEntity.handle.in_(handles)
+    ))
+    return entities_res.scalars().all()
+
+@router.get("/projects/{project_id}/drawings/{drawing_id}/revisions")
+async def list_revisions(
+    project_id: UUID,
+    drawing_id: UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    await _get_project(project_id, user, db)
+    result = await db.execute(select(DrawingRevision).where(DrawingRevision.drawing_id == drawing_id).order_by(DrawingRevision.revision_number.desc()))
     return result.scalars().all()
 
-@router.delete("/projects/{project_id}/drawings/{drawing_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_drawing(project_id: UUID, drawing_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+@router.get("/projects/{project_id}/drawings/{drawing_id}/canvas-data")
+async def get_canvas_data(project_id: UUID, drawing_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     await _get_project(project_id, user, db)
     drawing = await _get_drawing(drawing_id, project_id, db)
-    delete_file(drawing.file_path)
-    await db.delete(drawing)
-    await db.commit()
+
+    if drawing.filename.lower().endswith(".dxf"):
+        extractor = ExtractionService.get_extractor(drawing.file_path)
+        return extractor.to_canvas_json()
+    else:
+        return {"type": "PDF"}
+
+@router.get("/projects/{project_id}/drawings/{drawing_id}/analysis-status")
+async def get_analysis_status(project_id: UUID, drawing_id: UUID, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _get_project(project_id, user, db)
+    result = await db.execute(select(DXFAnalysisJob).where(DXFAnalysisJob.drawing_id == drawing_id).order_by(DXFAnalysisJob.created_at.desc()))
+    job = result.scalar_one_or_none()
+    if not job: return {"status": "NOT_STARTED"}
+    return {
+        "status": job.status,
+        "entities_found": job.entities_found,
+        "layers_found": job.layers_found,
+        "suggestions_generated": job.suggestions_generated
+    }
+
+# Add templates router
+from .templates import router as templates_router
+router.include_router(templates_router)
