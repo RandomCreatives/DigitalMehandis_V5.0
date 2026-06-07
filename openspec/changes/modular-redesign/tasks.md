@@ -19,6 +19,7 @@
 
 ## Phase 4: Professional UI
 
-- [ ] 4.1 Integrate AG Grid for the BOQ Management interface.
-- [ ] 4.2 Implement real-time "Geometry Link" badges in the BOQ rows.
-- [ ] 4.3 Add a global "AI Command Bar" (Cmd+K) for quick actions.
+- [x] 4.1 Reorder navigation — Drawings, Take-off, Bar Schedule, Quantities, Rates.
+- [ ] 4.2 Integrate AG Grid for the BOQ Management interface.
+- [ ] 4.3 Implement real-time "Geometry Link" badges in the BOQ rows.
+- [ ] 4.4 Add a global "AI Command Bar" (Cmd+K) for quick actions.
