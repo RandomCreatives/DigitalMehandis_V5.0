@@ -9,6 +9,7 @@ class BBSBarCreate(BaseModel):
     bar_shape: str
     quantity: int
     clear_length_m: float
+    cutting_length_m: float | None = None
     hook_length_mm: int = 0
     bend_deduction_mm: int = 0
     cover_top_mm: int = 50
@@ -24,6 +25,7 @@ class BBSBarUpdate(BaseModel):
     bar_shape: str | None = None
     quantity: int | None = None
     clear_length_m: float | None = None
+    cutting_length_m: float | None = None
     hook_length_mm: int | None = None
     cover_top_mm: int | None = None
     cover_bottom_mm: int | None = None
@@ -40,11 +42,11 @@ class BBSBarOut(BaseModel):
     bar_shape: str
     quantity: int
     clear_length_m: float
+    cutting_length_m: float | None = None
     hook_length_mm: int
     cover_top_mm: int
     cover_bottom_mm: int
     lap_length_mm: int | None
-    cutting_length_m: float | None = None
     weight_per_unit_kg: float | None = None
     total_weight_kg: float | None = None
     section: str | None

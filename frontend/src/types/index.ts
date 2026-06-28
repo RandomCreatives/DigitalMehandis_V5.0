@@ -108,6 +108,7 @@ export interface BBSBarCreate {
   bar_shape: BarShape;
   quantity: number;
   clear_length_m: number;
+  cutting_length_m?: number | null;
   hook_length_mm?: number;
   cover_top_mm?: number;
   cover_bottom_mm?: number;

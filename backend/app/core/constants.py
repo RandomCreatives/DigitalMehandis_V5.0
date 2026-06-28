@@ -1,4 +1,4 @@
-BAR_DIAMETERS = [6, 8, 10, 12, 16, 20, 25, 32]
+BAR_DIAMETERS = [6, 8, 10, 12, 14, 16, 20, 24, 25, 32]
 
 BAR_SHAPES = ["STRAIGHT", "L_SHAPE", "HOOK", "U_SHAPE", "SPIRAL"]
 
@@ -10,15 +10,19 @@ CODES_OF_PRACTICE = ["EBCS", "IS_CODE", "BS", "EUROCODE"]
 
 USER_ROLES = ["QS_PROFESSIONAL", "STUDENT", "CONTRACTOR", "ADMIN"]
 
+# Unit weights per Ethiopian / IS standard: W (kg/m) = D² / 162
+# Verified against real-world BBS CSV data (Digital Mehandis V5.0)
 UNIT_WEIGHTS_KG_PER_M = {
     6: 0.222,
     8: 0.395,
     10: 0.617,
     12: 0.888,
-    16: 1.578,
-    20: 2.466,
-    25: 3.853,
-    32: 6.313,
+    14: 1.21,
+    16: 1.58,
+    20: 2.47,
+    24: 3.55,
+    25: 3.85,
+    32: 6.31,
 }
 
 # WBS categories for take-off sheet

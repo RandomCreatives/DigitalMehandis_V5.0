@@ -1,6 +1,7 @@
 """
 BOQ Generator — matches takeoff items to rates and computes amounts.
 """
+from difflib import SequenceMatcher
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -8,6 +9,9 @@ from app.db.models import TakeoffItem, Rate
 
 
 class BOQGenerator:
+    # Minimum similarity threshold for fuzzy rate matching (0.0–1.0)
+    FUZZY_THRESHOLD = 0.55
+
     def __init__(self, db: AsyncSession, project_id: UUID, section: str = "COMBINED"):
         self.db = db
         self.project_id = project_id
@@ -63,8 +67,42 @@ class BOQGenerator:
 
     @staticmethod
     def _match_rate(description: str, rates: list[Rate]) -> Rate | None:
-        desc_lower = description.lower()
+        """
+        Match a takeoff description to the best available rate.
+
+        Strategy:
+        1. Substring match (exact containment) — highest confidence.
+        2. Token overlap — medium confidence (e.g. "concrete C25" vs "C25 concrete").
+        3. Fuzzy similarity (SequenceMatcher) — fallback for typos / slight wording differences.
+        """
+        desc_lower = description.lower().strip()
+        desc_tokens = set(desc_lower.split())
+        best_rate = None
+        best_score = 0.0
+
         for rate in rates:
-            if rate.description.lower() in desc_lower or desc_lower in rate.description.lower():
-                return rate
+            rate_desc = rate.description.lower().strip()
+
+            # 1. Exact substring containment
+            if rate_desc in desc_lower or desc_lower in rate_desc:
+                return rate  # immediate strong match
+
+            # 2. Token overlap ratio
+            rate_tokens = set(rate_desc.split())
+            if desc_tokens and rate_tokens:
+                overlap = len(desc_tokens & rate_tokens)
+                token_score = overlap / max(len(desc_tokens), len(rate_tokens))
+                if token_score > best_score:
+                    best_score = token_score
+                    best_rate = rate
+
+            # 3. Fuzzy sequence similarity
+            fuzzy = SequenceMatcher(None, desc_lower, rate_desc).ratio()
+            if fuzzy > best_score:
+                best_score = fuzzy
+                best_rate = rate
+
+        if best_score >= BOQGenerator.FUZZY_THRESHOLD:
+            return best_rate
+
         return None

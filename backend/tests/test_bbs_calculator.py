@@ -51,8 +51,8 @@ def test_u_shape_bar_cutting_length():
 
 def test_steel_weight_16mm():
     weight = BBSCalculator.calculate_weight(diameter_mm=16, length_m=10.0)
-    # 16mm unit weight = 1.578 kg/m
-    assert abs(weight - 15.78) < 0.01
+    # 16mm unit weight = 1.58 kg/m (D²/162 Ethiopian standard)
+    assert abs(weight - 15.8) < 0.01
 
 
 def test_steel_weight_12mm():
@@ -83,8 +83,8 @@ def test_enrich_bar():
     }
     enriched = BBSCalculator.enrich_bar(bar)
     assert enriched["cutting_length_m"] == 2.5
-    assert abs(enriched["weight_per_unit_kg"] - 3.945) < 0.01
-    assert abs(enriched["total_weight_kg"] - 39.45) < 0.1
+    assert abs(enriched["weight_per_unit_kg"] - 3.95) < 0.01
+    assert abs(enriched["total_weight_kg"] - 39.5) < 0.1
     assert enriched["lap_length_mm"] == 800
 
 

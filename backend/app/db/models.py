@@ -169,6 +169,7 @@ class BBSBar(Base):
     bar_shape: Mapped[str] = mapped_column(String(50), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     clear_length_m: Mapped[float] = mapped_column(Numeric(8, 3), nullable=False)
+    cutting_length_m: Mapped[float | None] = mapped_column(Numeric(8, 3), nullable=True)
     hook_length_mm: Mapped[int] = mapped_column(Integer, default=0)
     bend_deduction_mm: Mapped[int] = mapped_column(Integer, default=0)
     cover_top_mm: Mapped[int] = mapped_column(Integer, default=50)

@@ -5,34 +5,23 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 export const api = axios.create({
   baseURL: `${API_URL}/api/v1`,
   headers: { "Content-Type": "application/json" },
+  withCredentials: true, // Send httponly cookies with every request
 });
 
-// Attach access token to every request
-api.interceptors.request.use((config) => {
-  if (typeof window !== "undefined") {
-    const token = localStorage.getItem("access_token");
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Auto-refresh on 401
+// Auto-refresh on 401 — cookies carry the refresh token automatically
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true;
-      const refresh = localStorage.getItem("refresh_token");
-      if (refresh) {
-        try {
-          const { data } = await axios.post(`${API_URL}/api/v1/auth/refresh-token`, { refresh_token: refresh });
-          localStorage.setItem("access_token", data.access_token);
-          localStorage.setItem("refresh_token", data.refresh_token);
-          original.headers.Authorization = `Bearer ${data.access_token}`;
-          return api(original);
-        } catch {
-          localStorage.clear();
+      try {
+        // Refresh endpoint reads refresh_token from cookie and sets new access_token cookie
+        await axios.post(`${API_URL}/api/v1/auth/refresh-token`, {}, { withCredentials: true });
+        return api(original);
+      } catch {
+        // Refresh failed — redirect to login
+        if (typeof window !== "undefined") {
           window.location.href = "/auth/login";
         }
       }
